@@ -10,16 +10,23 @@ using PoshBuild.ComponentModel;
 
 namespace PoshBuild
 {
-    public static class CmdletHelp
+    public sealed class CmdletHelp
     {
+        XmlWriter _writer;
+        IEnumerable<Type> _types;
+        IEnumerable<ICmdletHelpDescriptor> _descriptors;
+
         #region Constants
+
         public const string MshNs = "http://msh";
         public const string MamlNs = "http://schemas.microsoft.com/maml/2004/10";
         public const string CommandNs = "http://schemas.microsoft.com/maml/dev/command/2004/10";
         public const string DevNs = "http://schemas.microsoft.com/maml/dev/2004/10";
+        
         #endregion
 
         #region Public Convenience Methods
+
         public static string GetHelpFileName( string snapInAssemblyName )
         {
             return string.Format( "{0}.dll-Help.xml", snapInAssemblyName );
@@ -49,9 +56,22 @@ namespace PoshBuild
             }
             return descriptors;
         }
+
+        #endregion
+
+        #region Constructors
+
+        CmdletHelp( IEnumerable<Type> types, XmlWriter writer, IEnumerable<ICmdletHelpDescriptor> descriptors )
+        {
+            _types = types;
+            _writer = writer;
+            _descriptors = descriptors;
+        }
+
         #endregion
 
         #region Public Help Generation Methods
+
         public static void GenerateHelpFile( Assembly snapInAssembly, XmlWriter writer )
         {
             GenerateHelpFile( snapInAssembly, writer, null );
@@ -70,15 +90,19 @@ namespace PoshBuild
 
         public static void GenerateHelpFile( IEnumerable<Type> types, XmlWriter writer, IEnumerable<ICmdletHelpDescriptor> descriptors )
         {
-            if ( types == null )
-                throw new ArgumentNullException( "types" );
-            if ( writer == null )
-                throw new ArgumentNullException( "writer" );
+            new CmdletHelp( types, writer, descriptors ).GenerateHelpFile();
+        }
 
+        #endregion
+
+        #region Private Methods
+
+        void GenerateHelpFile()
+        {
             var sortedDescriptors = new Dictionary<Type, ICmdletHelpDescriptor>();
-            if ( descriptors != null )
+            if ( _descriptors != null )
             {
-                foreach ( var descriptor in descriptors )
+                foreach ( var descriptor in _descriptors )
                 {
                     if ( descriptor == null )
                         throw new ArgumentException( "Found a null descriptor in the given descriptor collection." );
@@ -91,99 +115,101 @@ namespace PoshBuild
                 }
             }
 
-            GenerateHelpFileStart( writer );
+            GenerateHelpFileStart();
 
-            foreach ( Type type in types )
+            foreach ( Type type in _types )
             {
                 if ( type.IsSubclassOf( typeof( Cmdlet ) ) &&
                     Attribute.IsDefined( type, typeof( CmdletAttribute ) ) )
                 {
                     ICmdletHelpDescriptor descriptor = null;
                     sortedDescriptors.TryGetValue( type, out descriptor );
-                    GenerateHelpFileEntry( type, writer, descriptor );
+                    GenerateHelpFileEntry( type, descriptor );
                 }
             }
 
-            GenerateHelpFileEnd( writer );
+            GenerateHelpFileEnd();
         }
 
-        private static void GenerateHelpFileStart( XmlWriter writer )
+        void GenerateHelpFileStart()
         {
-            writer.WriteStartDocument();
-            writer.WriteStartElement( "helpItems", MshNs );
+            _writer.WriteStartDocument();
+            _writer.WriteStartElement( "helpItems", MshNs );
 
-            writer.WriteAttributeString( "xmlns", "maml", null, MamlNs );
-            writer.WriteAttributeString( "xmlns", "command", null, CommandNs );
-            writer.WriteAttributeString( "xmlns", "dev", null, DevNs );
-            writer.WriteAttributeString( "schema", "maml" );
+            _writer.WriteAttributeString( "xmlns", "maml", null, MamlNs );
+            _writer.WriteAttributeString( "xmlns", "command", null, CommandNs );
+            _writer.WriteAttributeString( "xmlns", "dev", null, DevNs );
+            _writer.WriteAttributeString( "schema", "maml" );
         }
 
-        private static void GenerateHelpFileEnd( XmlWriter writer )
+        private void GenerateHelpFileEnd()
         {
-            writer.WriteEndElement();
+            _writer.WriteEndElement();
         }
 
-        public static void GenerateHelpFileEntry( Type cmdletType, XmlWriter writer, ICmdletHelpDescriptor descriptor )
+        void GenerateHelpFileEntry( Type cmdletType, ICmdletHelpDescriptor descriptor )
         {
             if ( cmdletType == null )
                 throw new ArgumentNullException( "cmdletType" );
-            if ( writer == null )
-                throw new ArgumentNullException( "writer" );
 
             if ( !cmdletType.IsSubclassOf( typeof( Cmdlet ) ) )
                 throw new ArgumentException( "The given Cmdlet type does not inherit from Cmdlet." );
+
             CmdletAttribute cmdletAttribute = ( CmdletAttribute ) Attribute.GetCustomAttribute( cmdletType, typeof( CmdletAttribute ) );
+
             if ( cmdletAttribute == null )
                 throw new ArgumentException( "The given Cmdlet type does not have the CmdletAttribute attribute." );
 
             CmdletParametersInfo parametersInfo = new CmdletParametersInfo( cmdletType, descriptor );
 
-            writer.WriteStartElement( "command", "command", null );
-            {
-                GenerateCommandDetails( cmdletType, cmdletAttribute, writer, descriptor );
-                GenerateCommandDescription( cmdletType, cmdletAttribute, writer );
-                GenerateCommandSyntax( cmdletType, cmdletAttribute, parametersInfo, writer );
-                GenerateCommandParameters( cmdletType, cmdletAttribute, parametersInfo, writer );
-                GenerateCommandReturnValues( cmdletType, cmdletAttribute, writer );
-            }
-            writer.WriteEndElement();
-        }
-        #endregion
+            _writer.WriteStartElement( "command", "command", null );
 
-        #region Private Methods
-        private static void GenerateCommandDetails( Type cmdletType, CmdletAttribute cmdletAttribute, XmlWriter writer, ICmdletHelpDescriptor descriptor )
+            GenerateCommandDetails( cmdletType, cmdletAttribute, descriptor );
+            GenerateCommandDescription( cmdletType, cmdletAttribute );
+            GenerateCommandSyntax( cmdletType, cmdletAttribute, parametersInfo );
+            GenerateCommandParameters( cmdletType, cmdletAttribute, parametersInfo );
+            GenerateCommandReturnValues( cmdletType, cmdletAttribute );
+            
+            _writer.WriteEndElement(); // </command:command>
+        }
+
+        
+        void GenerateCommandDetails( Type cmdletType, CmdletAttribute cmdletAttribute, ICmdletHelpDescriptor descriptor )
         {
-            writer.WriteStartElement( "command", "details", null );
-            {
-                writer.WriteElementString( "command", "name", null, string.Format( "{0}-{1}", cmdletAttribute.VerbName, cmdletAttribute.NounName ) );
-                writer.WriteElementString( "command", "verb", null, cmdletAttribute.VerbName.ToLowerInvariant() );
-                writer.WriteElementString( "command", "noun", null, cmdletAttribute.NounName.ToLowerInvariant() );
+            _writer.WriteStartElement( "command", "details", null );
 
-                SynopsisAttribute synopsisAttribute = null;
-                if ( descriptor != null )
-                    synopsisAttribute = descriptor.GetSynopsis();
-                if ( synopsisAttribute == null )
-                    synopsisAttribute = ( SynopsisAttribute ) Attribute.GetCustomAttribute( cmdletType, typeof( SynopsisAttribute ) );
-                if ( synopsisAttribute != null )
+            _writer.WriteElementString( "command", "name", null, string.Format( "{0}-{1}", cmdletAttribute.VerbName, cmdletAttribute.NounName ) );
+            _writer.WriteElementString( "command", "verb", null, cmdletAttribute.VerbName.ToLowerInvariant() );
+            _writer.WriteElementString( "command", "noun", null, cmdletAttribute.NounName.ToLowerInvariant() );
+
+            SynopsisAttribute synopsisAttribute = null;
+            
+            if ( descriptor != null )
+                synopsisAttribute = descriptor.GetSynopsis();
+
+            if ( synopsisAttribute == null )
+                synopsisAttribute = ( SynopsisAttribute ) Attribute.GetCustomAttribute( cmdletType, typeof( SynopsisAttribute ) );
+
+            if ( synopsisAttribute != null )
+            {
+                _writer.WriteStartElement( "maml", "description", null );
                 {
-                    writer.WriteStartElement( "maml", "description", null );
-                    {
-                        writer.WriteElementString( "maml", "para", null, synopsisAttribute.Synopsis );
-                    }
-                    writer.WriteEndElement();
+                    _writer.WriteElementString( "maml", "para", null, synopsisAttribute.Synopsis );
                 }
+                _writer.WriteEndElement(); // </maml:description>
             }
-            writer.WriteEndElement();
+
+            _writer.WriteEndElement(); // </command:details>
         }
 
 
-        private static void GenerateCommandReturnValues( Type cmdletType, CmdletAttribute cmdletAttribute, XmlWriter writer )
+        void GenerateCommandReturnValues( Type cmdletType, CmdletAttribute cmdletAttribute )
         {
             var attributes = cmdletType.GetCustomAttributes( typeof( OutputTypeAttribute ), true ).OfType<OutputTypeAttribute>().ToList();
 
             if ( attributes.Count > 0 )
             {
-                writer.WriteStartElement( "command", "returnValues", null );
+                _writer.WriteStartElement( "command", "returnValues", null );
 
                 foreach ( var attr in attributes )
                 {
@@ -191,166 +217,150 @@ namespace PoshBuild
 
                     foreach ( var type in attr.Type )
                     {
-                        writer.WriteStartElement( "command", "returnValue", null );
+                        _writer.WriteStartElement( "command", "returnValue", null );
 
-                        writer.WriteStartElement( "dev", "type", null );
+                        _writer.WriteStartElement( "dev", "type", null );
 
-                        writer.WriteElementString( "maml", "name", null, type.Name );
-                        writer.WriteElementString( "maml", "uri", null, string.Empty );
+                        _writer.WriteElementString( "maml", "name", null, type.Name );
+                        _writer.WriteElementString( "maml", "uri", null, string.Empty );
                         // This description element is *not* read by Get-Help.
-                        writer.WriteElementString( "maml", "description", null, string.Empty );
+                        _writer.WriteElementString( "maml", "description", null, string.Empty );
 
-                        writer.WriteEndElement(); // </dev:type>
+                        _writer.WriteEndElement(); // </dev:type>
 
                         // This description element *is* read by Get-Help.
-                        writer.WriteStartElement( "maml", "description", null );
+                        _writer.WriteStartElement( "maml", "description", null );
 
                         if ( !string.IsNullOrWhiteSpace( attr.ProviderCmdlet ) )
-                            writer.WriteElementString( "maml", "para", null, string.Format( "Applies to Provider Cmdlet '{0}'.", attr.ProviderCmdlet ) );
+                            _writer.WriteElementString( "maml", "para", null, string.Format( "Applies to Provider Cmdlet '{0}'.", attr.ProviderCmdlet ) );
 
                         if ( parameterSetNames != null && parameterSetNames.Count > 0 )
                         {
-                            writer.WriteElementString( "maml", "para", null, "Applies to parameter sets:" );
+                            _writer.WriteElementString( "maml", "para", null, "Applies to parameter sets:" );
 
                             foreach ( var name in parameterSetNames )
-                                writer.WriteElementString( "maml", "para", null, "-- " + name );
+                                _writer.WriteElementString( "maml", "para", null, "-- " + name );
                         }
 
-                        writer.WriteEndElement(); // </maml:description>
+                        _writer.WriteEndElement(); // </maml:description>
 
-                        writer.WriteEndElement(); // </command:returnValue>
+                        _writer.WriteEndElement(); // </command:returnValue>
                     }
 
                 }
 
-                writer.WriteEndElement(); // </command:returnValues>
+                _writer.WriteEndElement(); // </command:returnValues>
             }
         }
 
-        private static void GenerateCommandDescription( Type cmdletType, CmdletAttribute cmdletAttribute, XmlWriter writer )
+        void GenerateCommandDescription( Type cmdletType, CmdletAttribute cmdletAttribute )
         {
             DescriptionAttribute descriptionAttribute = ( DescriptionAttribute ) Attribute.GetCustomAttribute( cmdletType, typeof( DescriptionAttribute ) );
             if ( descriptionAttribute != null )
             {
-                writer.WriteStartElement( "maml", "description", null );
-                {
-                    writer.WriteElementString( "maml", "para", null, descriptionAttribute.Description );
-                }
-                writer.WriteEndElement();
+                _writer.WriteStartElement( "maml", "description", null );
+                _writer.WriteElementString( "maml", "para", null, descriptionAttribute.Description );
+                _writer.WriteEndElement(); // </maml:description>
             }
         }
 
-        private static void GenerateCommandSyntax( Type cmdletType, CmdletAttribute cmdletAttribute, CmdletParametersInfo parametersInfo, XmlWriter writer )
+        void GenerateCommandSyntax( Type cmdletType, CmdletAttribute cmdletAttribute, CmdletParametersInfo parametersInfo )
         {
-            writer.WriteStartElement( "command", "syntax", null );
+            _writer.WriteStartElement( "command", "syntax", null );
+            foreach ( string parameterSetName in parametersInfo.ParametersByParameterSet.Keys )
             {
-                foreach ( string parameterSetName in parametersInfo.ParametersByParameterSet.Keys )
-                {
-                    writer.WriteStartElement( "command", "syntaxItem", null );
-                    {
-                        writer.WriteElementString( "maml", "name", null, string.Format( "{0}-{1}", cmdletAttribute.VerbName, cmdletAttribute.NounName ) );
+                _writer.WriteStartElement( "command", "syntaxItem", null );
+                _writer.WriteElementString( "maml", "name", null, string.Format( "{0}-{1}", cmdletAttribute.VerbName, cmdletAttribute.NounName ) );
 
-                        foreach ( CmdletParameterInfo parameterInfo in parametersInfo.ParametersByParameterSet[ parameterSetName ] )
-                        {
-                            GenerateCommandSyntaxParameter( writer, parameterSetName, parameterInfo );
-                        }
-                    }
-                    writer.WriteEndElement();
-                }
+                foreach ( CmdletParameterInfo parameterInfo in parametersInfo.ParametersByParameterSet[ parameterSetName ] )
+                    GenerateCommandSyntaxParameter( parameterSetName, parameterInfo );
+
+                _writer.WriteEndElement(); // </command:syntaxItem>
             }
-            writer.WriteEndElement();
+            _writer.WriteEndElement(); // </command:syntax>
         }
 
-        private static void GenerateCommandSyntaxParameter( XmlWriter writer, string parameterSetName, CmdletParameterInfo parameterInfo )
+        void GenerateCommandSyntaxParameter( string parameterSetName, CmdletParameterInfo parameterInfo )
         {
             int parameterSetIndex = parameterInfo.GetParameterSetIndex( parameterSetName );
 
-            writer.WriteStartElement( "command", "parameter", null );
-            {
-                writer.WriteAttributeString( "required", parameterInfo.Mandatory( parameterSetIndex ).ToString() );
-                writer.WriteAttributeString( "globbing", parameterInfo.Globbing.ToString() );
+            _writer.WriteStartElement( "command", "parameter", null );
+            _writer.WriteAttributeString( "required", parameterInfo.Mandatory( parameterSetIndex ).ToString() );
+            _writer.WriteAttributeString( "globbing", parameterInfo.Globbing.ToString() );
 
-                string pipelineInput = GetPipelineInputAttributeString( parameterInfo, parameterSetIndex );
-                writer.WriteAttributeString( "pipelineInput", pipelineInput );
+            string pipelineInput = GetPipelineInputAttributeString( parameterInfo, parameterSetIndex );
+            _writer.WriteAttributeString( "pipelineInput", pipelineInput );
 
-                string position = GetPositionAttributeString( parameterInfo, parameterSetIndex );
-                writer.WriteAttributeString( "position", position );
+            string position = GetPositionAttributeString( parameterInfo, parameterSetIndex );
+            _writer.WriteAttributeString( "position", position );
 
-                writer.WriteElementString( "maml", "name", null, parameterInfo.ParameterName );
+            _writer.WriteElementString( "maml", "name", null, parameterInfo.ParameterName );
 
-                writer.WriteStartElement( "maml", "description", null );
-                {
-                    writer.WriteElementString( "maml", "para", null, parameterInfo.ParameterAttributes[ parameterSetIndex ].HelpMessage );
-                }
-                writer.WriteEndElement();
+            _writer.WriteStartElement( "maml", "description", null );
+            _writer.WriteElementString( "maml", "para", null, parameterInfo.ParameterAttributes[ parameterSetIndex ].HelpMessage );
+            _writer.WriteEndElement(); // </maml:description>
 
-                writer.WriteStartElement( "command", "parameterValue", null );
-                {
-                    writer.WriteAttributeString( "required", ( parameterInfo.ParameterType == typeof( SwitchParameter ) ).ToString() );
-                    writer.WriteAttributeString( "variableLength", ( typeof( IEnumerable ).IsAssignableFrom( parameterInfo.ParameterType ) ).ToString() );
-                    writer.WriteString( parameterInfo.ParameterType.ToString() );
-                }
-                writer.WriteEndElement();
-            }
-            writer.WriteEndElement();
+            _writer.WriteStartElement( "command", "parameterValue", null );
+            
+            _writer.WriteAttributeString( "required", ( parameterInfo.ParameterType == typeof( SwitchParameter ) ).ToString() );
+            _writer.WriteAttributeString( "variableLength", ( typeof( IEnumerable ).IsAssignableFrom( parameterInfo.ParameterType ) ).ToString() );
+            _writer.WriteString( parameterInfo.ParameterType.ToString() );
+
+            _writer.WriteEndElement(); // </command:parameterValue>
+            
+            _writer.WriteEndElement(); // </command:parameter>
         }
 
-        private static void GenerateCommandParameters( Type cmdletType, CmdletAttribute cmdletAttribute, CmdletParametersInfo parametersInfo, XmlWriter writer )
+        void GenerateCommandParameters( Type cmdletType, CmdletAttribute cmdletAttribute, CmdletParametersInfo parametersInfo )
         {
-            writer.WriteStartElement( "command", "parameters", null );
-            {
-                foreach ( CmdletParameterInfo parameterInfo in parametersInfo.Parameters )
-                {
-                    GenerateCommandParameter( cmdletType, cmdletAttribute, parameterInfo, writer );
-                }
-            }
-            writer.WriteEndElement();
+            _writer.WriteStartElement( "command", "parameters", null );
+
+            foreach ( CmdletParameterInfo parameterInfo in parametersInfo.Parameters )
+                GenerateCommandParameter( cmdletType, cmdletAttribute, parameterInfo );
+
+            _writer.WriteEndElement(); // </command:parameters>
         }
 
-        private static void GenerateCommandParameter( Type cmdletType, CmdletAttribute cmdletAttribute, CmdletParameterInfo parameterInfo, XmlWriter writer )
+        void GenerateCommandParameter( Type cmdletType, CmdletAttribute cmdletAttribute, CmdletParameterInfo parameterInfo )
         {
-            writer.WriteStartElement( "command", "parameter", null );
-            {
-                writer.WriteAttributeString( "required", parameterInfo.Mandatory( 0 ).ToString() );
-                writer.WriteAttributeString( "variableLength", ( typeof( IEnumerable ).IsAssignableFrom( parameterInfo.ParameterType ) ).ToString() );
-                writer.WriteAttributeString( "globbing", parameterInfo.Globbing.ToString() );
+            _writer.WriteStartElement( "command", "parameter", null );
+            _writer.WriteAttributeString( "required", parameterInfo.Mandatory( 0 ).ToString() );
+            _writer.WriteAttributeString( "variableLength", ( typeof( IEnumerable ).IsAssignableFrom( parameterInfo.ParameterType ) ).ToString() );
+            _writer.WriteAttributeString( "globbing", parameterInfo.Globbing.ToString() );
 
-                string pipelineInput = GetPipelineInputAttributeString( parameterInfo, 0 );
-                writer.WriteAttributeString( "pipelineInput", pipelineInput );
+            string pipelineInput = GetPipelineInputAttributeString( parameterInfo, 0 );
+            _writer.WriteAttributeString( "pipelineInput", pipelineInput );
 
-                string position = GetPositionAttributeString( parameterInfo, 0 );
-                writer.WriteAttributeString( "position", position );
+            string position = GetPositionAttributeString( parameterInfo, 0 );
+            _writer.WriteAttributeString( "position", position );
 
-                writer.WriteElementString( "maml", "name", null, parameterInfo.ParameterName );
+            _writer.WriteElementString( "maml", "name", null, parameterInfo.ParameterName );
 
-                writer.WriteStartElement( "maml", "description", null );
-                {
-                    writer.WriteElementString( "maml", "para", null, parameterInfo.ParameterAttributes[ 0 ].HelpMessage );
-                }
-                writer.WriteEndElement();
+            _writer.WriteStartElement( "maml", "description", null );
+            
+            _writer.WriteElementString( "maml", "para", null, parameterInfo.ParameterAttributes[ 0 ].HelpMessage );
+            
+            _writer.WriteEndElement(); // </maml:description>
 
-                writer.WriteStartElement( "command", "parameterValue", null );
-                {
-                    writer.WriteAttributeString( "required", ( parameterInfo.ParameterType == typeof( SwitchParameter ) ).ToString() );
-                    writer.WriteAttributeString( "variableLength", ( typeof( IEnumerable ).IsAssignableFrom( parameterInfo.ParameterType ) ).ToString() );
+            _writer.WriteStartElement( "command", "parameterValue", null );
+            
+            _writer.WriteAttributeString( "required", ( parameterInfo.ParameterType == typeof( SwitchParameter ) ).ToString() );
+            _writer.WriteAttributeString( "variableLength", ( typeof( IEnumerable ).IsAssignableFrom( parameterInfo.ParameterType ) ).ToString() );
+            _writer.WriteString( parameterInfo.ParameterType.ToString() );
 
-                    writer.WriteString( parameterInfo.ParameterType.ToString() );
-                }
-                writer.WriteEndElement();
+            _writer.WriteEndElement(); // </command:parameterValue>
 
-                writer.WriteStartElement( "dev", "type", null );
-                {
-                    writer.WriteElementString( "maml", "name", null, parameterInfo.ParameterType.ToString() );
-                }
-                writer.WriteEndElement();
+            _writer.WriteStartElement( "dev", "type", null );
+            _writer.WriteElementString( "maml", "name", null, parameterInfo.ParameterType.ToString() );
+            _writer.WriteEndElement(); // </dev:type>
 
-                object defaultValue = parameterInfo.DefaultValue;
-                writer.WriteElementString( "dev", "defaultValue", null, ( defaultValue == null ) ? "Null" : defaultValue.ToString() );
-            }
-            writer.WriteEndElement();
+            object defaultValue = parameterInfo.DefaultValue;
+            _writer.WriteElementString( "dev", "defaultValue", null, ( defaultValue == null ) ? "Null" : defaultValue.ToString() );
+
+            _writer.WriteEndElement(); // </command:parameter>
         }
 
-        private static string GetPositionAttributeString( CmdletParameterInfo parameterInfo, int parameterSetIndex )
+        string GetPositionAttributeString( CmdletParameterInfo parameterInfo, int parameterSetIndex )
         {
             string position = "named";
             if ( parameterInfo.Position( parameterSetIndex ) >= 0 )
@@ -358,7 +368,7 @@ namespace PoshBuild
             return position;
         }
 
-        private static string GetPipelineInputAttributeString( CmdletParameterInfo parameterInfo, int parameterSetIndex )
+        string GetPipelineInputAttributeString( CmdletParameterInfo parameterInfo, int parameterSetIndex )
         {
             string pipelineInput = "false";
             if ( parameterInfo.ValueFromPipeline( parameterSetIndex ) )
@@ -375,6 +385,7 @@ namespace PoshBuild
             }
             return pipelineInput;
         }
+
         #endregion
     }
 }
