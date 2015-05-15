@@ -6,57 +6,60 @@ using PoshBuild.ComponentModel;
 
 namespace PoshBuild
 {
-    internal class CmdletParametersInfo
+    sealed class CmdletParametersInfo
     {
+        public CmdletTypeProcessor Parent { get; private set; }
         public IList<CmdletParameterInfo> Parameters { get; private set; }
         public IDictionary<string, IList<CmdletParameterInfo>> ParametersByParameterSet { get; private set; }
 
-        public CmdletParametersInfo(Type cmdletType, ICmdletHelpDescriptor descriptor)
+        public CmdletParametersInfo( CmdletTypeProcessor parent, Type cmdletType, ICmdletHelpDescriptor descriptor )
         {
-            if (cmdletType == null)
-                throw new ArgumentNullException("cmdletType");
+            if ( cmdletType == null )
+                throw new ArgumentNullException( "cmdletType" );
+
+            Parent = parent;
 
             Parameters = new List<CmdletParameterInfo>();
-            foreach (PropertyInfo propertyInfo in cmdletType.GetProperties())
+            foreach ( PropertyInfo propertyInfo in cmdletType.GetProperties() )
             {
-                if (Attribute.IsDefined(propertyInfo, typeof(ParameterAttribute)))
+                if ( Attribute.IsDefined( propertyInfo, typeof( ParameterAttribute ) ) )
                 {
-                    Parameters.Add(new CmdletParameterInfo(propertyInfo, descriptor));
+                    Parameters.Add( new CmdletParameterInfo( this, propertyInfo, descriptor ) );
                 }
             }
 
             ParametersByParameterSet = new Dictionary<string, IList<CmdletParameterInfo>>();
             List<CmdletParameterInfo> parametersInAllSets = new List<CmdletParameterInfo>();
-            foreach (var parameterInfo in Parameters)
+            foreach ( var parameterInfo in Parameters )
             {
-                foreach (string parameterSetName in parameterInfo.GetParameterSetNames())
+                foreach ( string parameterSetName in parameterInfo.GetParameterSetNames() )
                 {
-                    if (parameterSetName == ParameterAttribute.AllParameterSets)
+                    if ( parameterSetName == ParameterAttribute.AllParameterSets )
                     {
-                        parametersInAllSets.Add(parameterInfo);
+                        parametersInAllSets.Add( parameterInfo );
                     }
                     else
                     {
-                        if (!ParametersByParameterSet.ContainsKey(parameterSetName))
-                            ParametersByParameterSet.Add(parameterSetName, new List<CmdletParameterInfo>());
+                        if ( !ParametersByParameterSet.ContainsKey( parameterSetName ) )
+                            ParametersByParameterSet.Add( parameterSetName, new List<CmdletParameterInfo>() );
 
-                        ParametersByParameterSet[parameterSetName].Add(parameterInfo);
+                        ParametersByParameterSet[ parameterSetName ].Add( parameterInfo );
                     }
                 }
             }
-            foreach (var parameterInfo in parametersInAllSets)
+            foreach ( var parameterInfo in parametersInAllSets )
             {
-                foreach (IList<CmdletParameterInfo> parameterInfos in ParametersByParameterSet.Values)
+                foreach ( IList<CmdletParameterInfo> parameterInfos in ParametersByParameterSet.Values )
                 {
-                    parameterInfos.Add(parameterInfo);
+                    parameterInfos.Add( parameterInfo );
                 }
             }
-            if (ParametersByParameterSet.Count == 0)
+            if ( ParametersByParameterSet.Count == 0 )
             {
-                ParametersByParameterSet.Add(ParameterAttribute.AllParameterSets, new List<CmdletParameterInfo>());
-                foreach (var parameterInfo in parametersInAllSets)
+                ParametersByParameterSet.Add( ParameterAttribute.AllParameterSets, new List<CmdletParameterInfo>() );
+                foreach ( var parameterInfo in parametersInAllSets )
                 {
-                    ParametersByParameterSet[ParameterAttribute.AllParameterSets].Add(parameterInfo);
+                    ParametersByParameterSet[ ParameterAttribute.AllParameterSets ].Add( parameterInfo );
                 }
             }
         }

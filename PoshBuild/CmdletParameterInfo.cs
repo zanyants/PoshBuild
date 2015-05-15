@@ -7,8 +7,9 @@ using PoshBuild.ComponentModel;
 
 namespace PoshBuild
 {
-    internal class CmdletParameterInfo
+    sealed class CmdletParameterInfo
     {
+        public CmdletParametersInfo Parent { get; private set; }
         public string ParameterName { get; private set; }
         public Type ParameterType { get; private set; }
         public IList<ParameterAttribute> ParameterAttributes { get; private set; }
@@ -19,75 +20,76 @@ namespace PoshBuild
         public bool Globbing { get { return GlobbingAttribute != null ? GlobbingAttribute.SupportsGlobbing : false; } }
         public object DefaultValue { get { return DefaultValueAttribute != null ? DefaultValueAttribute.Value : string.Empty; } }
 
-        public CmdletParameterInfo(PropertyInfo propertyInfo, ICmdletHelpDescriptor descriptor)
+        public CmdletParameterInfo( CmdletParametersInfo parent, PropertyInfo propertyInfo, ICmdletHelpDescriptor descriptor )
         {
+            Parent = parent;
             ParameterName = propertyInfo.Name;
             ParameterType = propertyInfo.PropertyType;
 
             ParameterAttributes = new List<ParameterAttribute>();
-            Attribute[] parameterAttributes = Attribute.GetCustomAttributes(propertyInfo, typeof(ParameterAttribute));
-            foreach (var parameterAttribute in parameterAttributes)
+            Attribute[] parameterAttributes = Attribute.GetCustomAttributes( propertyInfo, typeof( ParameterAttribute ) );
+            foreach ( var parameterAttribute in parameterAttributes )
             {
-                ParameterAttributes.Add((ParameterAttribute)parameterAttribute);
+                ParameterAttributes.Add( ( ParameterAttribute ) parameterAttribute );
             }
-            if (ParameterAttributes.Count == 0)
-                throw new ArgumentException("The given property doesn't have a ParameterAttribute attribute.");
+            if ( ParameterAttributes.Count == 0 )
+                throw new ArgumentException( "The given property doesn't have a ParameterAttribute attribute." );
 
-            if (descriptor != null)
-                GlobbingAttribute = descriptor.GetGlobbing(propertyInfo.Name);
-            if (GlobbingAttribute == null)
-                GlobbingAttribute = (GlobbingAttribute)Attribute.GetCustomAttribute(propertyInfo, typeof(GlobbingAttribute));
+            if ( descriptor != null )
+                GlobbingAttribute = descriptor.GetGlobbing( propertyInfo.Name );
+            if ( GlobbingAttribute == null )
+                GlobbingAttribute = ( GlobbingAttribute ) Attribute.GetCustomAttribute( propertyInfo, typeof( GlobbingAttribute ) );
 
-            DefaultValueAttribute = (DefaultValueAttribute)Attribute.GetCustomAttribute(propertyInfo, typeof(DefaultValueAttribute));
+            DefaultValueAttribute = ( DefaultValueAttribute ) Attribute.GetCustomAttribute( propertyInfo, typeof( DefaultValueAttribute ) );
         }
 
-        public int GetParameterSetIndex(string parameterSetName)
+        public int GetParameterSetIndex( string parameterSetName )
         {
             int index = 0;
-            foreach (var parameterAttribute in ParameterAttributes)
+            foreach ( var parameterAttribute in ParameterAttributes )
             {
-                if (parameterAttribute.ParameterSetName == parameterSetName)
+                if ( parameterAttribute.ParameterSetName == parameterSetName )
                     return index;
                 index++;
             }
-            throw new KeyNotFoundException("The parameter set name was specified for this parameter.");
+            throw new KeyNotFoundException( "The parameter set name was specified for this parameter." );
         }
 
-        public bool Mandatory(int parameterSetIndex)
+        public bool Mandatory( int parameterSetIndex )
         {
-            return ParameterAttributes[parameterSetIndex].Mandatory;
+            return ParameterAttributes[ parameterSetIndex ].Mandatory;
         }
 
-        public int Position(int parameterSetIndex)
+        public int Position( int parameterSetIndex )
         {
-            return ParameterAttributes[parameterSetIndex].Position;
+            return ParameterAttributes[ parameterSetIndex ].Position;
         }
 
-        public bool ValueFromPipeline(int parameterSetIndex)
+        public bool ValueFromPipeline( int parameterSetIndex )
         {
-            return ParameterAttributes[parameterSetIndex].ValueFromPipeline;
+            return ParameterAttributes[ parameterSetIndex ].ValueFromPipeline;
         }
 
-        public bool ValueFromPipelineByPropertyName(int parameterSetIndex)
+        public bool ValueFromPipelineByPropertyName( int parameterSetIndex )
         {
-            return ParameterAttributes[parameterSetIndex].ValueFromPipelineByPropertyName;
+            return ParameterAttributes[ parameterSetIndex ].ValueFromPipelineByPropertyName;
         }
 
-        public bool ValueFromRemaingArguments(int parameterSetIndex)
+        public bool ValueFromRemaingArguments( int parameterSetIndex )
         {
-            return ParameterAttributes[parameterSetIndex].ValueFromRemainingArguments;
+            return ParameterAttributes[ parameterSetIndex ].ValueFromRemainingArguments;
         }
 
         public string[] GetParameterSetNames()
         {
-            if (ParameterAttributes.Count == 1 &&
-                string.IsNullOrEmpty(ParameterAttributes[0].ParameterSetName))
-                return new string[1] { ParameterAttribute.AllParameterSets };
+            if ( ParameterAttributes.Count == 1 &&
+                string.IsNullOrEmpty( ParameterAttributes[ 0 ].ParameterSetName ) )
+                return new string[ 1 ] { ParameterAttribute.AllParameterSets };
 
             List<string> parameterSets = new List<string>();
-            foreach (var parameterAttribute in ParameterAttributes)
+            foreach ( var parameterAttribute in ParameterAttributes )
             {
-                parameterSets.Add(parameterAttribute.ParameterSetName);
+                parameterSets.Add( parameterAttribute.ParameterSetName );
             }
             return parameterSets.ToArray();
         }

@@ -49,7 +49,7 @@ namespace PoshBuild.Build
                 Assembly assembly = Assembly.LoadFrom(assemblyPath);
                 var types = new List<Type>(assembly.GetExportedTypes());
 
-                string helpFile = Path.Combine(Path.GetDirectoryName(assemblyPath), CmdletHelp.GetHelpFileName(assemblyName));
+                string helpFile = Path.Combine(Path.GetDirectoryName(assemblyPath), AssemblyProcessor.GetHelpFileName(assemblyName));
                 sortedTypes.Add(helpFile, types);
             }
 
@@ -59,7 +59,7 @@ namespace PoshBuild.Build
                 foreach (var assemblyItem in DescriptorAssemblies)
                 {
                     Assembly assembly = Assembly.LoadFrom(assemblyItem.GetMetadata("FullPath"));
-                    var d = CmdletHelp.GetDescriptors(assembly);
+                    var d = AssemblyProcessor.GetDescriptors( assembly );
                     descriptors.AddRange(d);
                 }
             }
@@ -73,7 +73,7 @@ namespace PoshBuild.Build
                 writerSettings.Indent = true;
                 using (XmlWriter writer = XmlWriter.Create(helpFile, writerSettings))
                 {
-                    CmdletHelp.GenerateHelpFile(sortedTypes[helpFile], writer, descriptors);
+                    AssemblyProcessor.GenerateHelpFile( sortedTypes[ helpFile ], writer, descriptors );
                 }
 
                 HelpFiles[helpFileIndex++] = new TaskItem(helpFile);
