@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Management.Automation;
 using System.Reflection;
 using System.Xml;
@@ -143,6 +144,7 @@ namespace PoshBuild
                 GenerateCommandDescription(cmdletType, cmdletAttribute, writer);
                 GenerateCommandSyntax(cmdletType, cmdletAttribute, parametersInfo, writer);
                 GenerateCommandParameters(cmdletType, cmdletAttribute, parametersInfo, writer);
+                GenerateCommandReturnValues( cmdletType, cmdletAttribute, writer );
             }
             writer.WriteEndElement();
         } 
@@ -172,6 +174,57 @@ namespace PoshBuild
                 }
             }
             writer.WriteEndElement();
+        }
+
+
+        private static void GenerateCommandReturnValues(Type cmdletType, CmdletAttribute cmdletAttribute, XmlWriter writer)
+        {
+            var attributes = cmdletType.GetCustomAttributes( typeof( OutputTypeAttribute ), true ).OfType<OutputTypeAttribute>().ToList();
+
+            if ( attributes.Count > 0 )
+            {
+                writer.WriteStartElement( "command", "returnValues", null );
+                
+                foreach ( var attr in attributes )
+                {
+                    var parameterSetNames = attr.ParameterSetName == null ? null : attr.ParameterSetName.Where( s => !string.IsNullOrWhiteSpace( s ) && s != ParameterAttribute.AllParameterSets ).ToList();
+                    
+                    foreach ( var type in attr.Type )
+                    {
+                        writer.WriteStartElement( "command", "returnValue", null );
+
+                        writer.WriteStartElement( "dev", "type", null );
+                        
+                        writer.WriteElementString( "maml", "name", null, type.Name );
+                        writer.WriteElementString( "maml", "uri", null, string.Empty );
+                        // This description element is *not* read by Get-Help.
+                        writer.WriteElementString( "maml", "description", null, string.Empty );
+                        
+                        writer.WriteEndElement(); // </dev:type>
+
+                        // This description element *is* read by Get-Help.
+                        writer.WriteStartElement( "maml", "description", null );
+
+                        if ( !string.IsNullOrWhiteSpace( attr.ProviderCmdlet ) )
+                            writer.WriteElementString( "maml", "para", null, string.Format( "Applies to Provider Cmdlet '{0}'.", attr.ProviderCmdlet ) );
+
+                        if ( parameterSetNames != null && parameterSetNames.Count > 0 )
+                        {
+                            writer.WriteElementString( "maml", "para", null, "Applies to parameter sets:" );
+
+                            foreach ( var name in parameterSetNames )
+                                writer.WriteElementString( "maml", "para", null, "-- " + name );
+                        }
+
+                        writer.WriteEndElement(); // </maml:description>
+
+                        writer.WriteEndElement(); // </command:returnValue>
+                    }
+
+                }
+
+                writer.WriteEndElement(); // </command:returnValues>
+            }
         }
 
         private static void GenerateCommandDescription(Type cmdletType, CmdletAttribute cmdletAttribute, XmlWriter writer)
