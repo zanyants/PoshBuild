@@ -3,9 +3,9 @@
 
   <UsingTask
     TaskName="PoshBuild.Build.GenerateCmdletHelp"
-    AssemblyFile="$(PoshBuildDirectory)PoshBuild.dll" />
+    AssemblyFile="$(MSBuildThisFileDirectory)PoshBuild.dll" />
   <UsingTask
     TaskName="PoshBuild.Build.GenerateDisplayFormat"
-    AssemblyFile="$(PoshBuildDirectory)PoshBuild.dll" />
+    AssemblyFile="$(MSBuildThisFileDirectory)PoshBuild.dll" />
   
 </Project>
