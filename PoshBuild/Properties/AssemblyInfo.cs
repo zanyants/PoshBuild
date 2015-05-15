@@ -8,9 +8,9 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("PoshBuild")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("Electronic Arts Inc")]
+[assembly: AssemblyCompany("PoshBuild Contributors")]
 [assembly: AssemblyProduct("PoshBuild")]
-[assembly: AssemblyCopyright("Copyright © Electronic Arts Inc 2008")]
+[assembly: AssemblyCopyright("Copyright © PoshBuild Contributors")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
