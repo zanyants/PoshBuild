@@ -44,7 +44,7 @@ namespace PoshBuild
 
             _writer.WriteStartElement( "command", "parameterValue", null );
 
-            _writer.WriteAttributeString( "required", ( _parameter.ParameterType == typeof( SwitchParameter ) ).ToString() );
+            _writer.WriteAttributeString( "required", ( _parameter.ParameterType != typeof( SwitchParameter ) ).ToString() );
             _writer.WriteAttributeString( "variableLength", ( typeof( IEnumerable ).IsAssignableFrom( _parameter.ParameterType ) ).ToString() );
             _writer.WriteString( _parameter.ParameterType.GetPSPrettyName() );
 
@@ -76,7 +76,7 @@ namespace PoshBuild
 
             _writer.WriteStartElement( "command", "parameterValue", null );
 
-            _writer.WriteAttributeString( "required", ( _parameter.ParameterType == typeof( SwitchParameter ) ).ToString() );
+            _writer.WriteAttributeString( "required", ( _parameter.ParameterType != typeof( SwitchParameter ) ).ToString() );
             _writer.WriteAttributeString( "variableLength", ( typeof( IEnumerable ).IsAssignableFrom( _parameter.ParameterType ) ).ToString() );
             _writer.WriteString( _parameter.ParameterType.GetPSPrettyName() );
 
