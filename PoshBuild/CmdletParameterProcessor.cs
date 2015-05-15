@@ -24,8 +24,16 @@ namespace PoshBuild
 
         public void GenerateCommandSyntaxParameter( string parameterSetName )
         {
-            int parameterSetIndex = _parameter.GetParameterSetIndex( parameterSetName );
+            GenerateParameter( _parameter.GetParameterSetIndex( parameterSetName ) );
+        }
 
+        public void GenerateCommandParameter()
+        {
+            GenerateParameter( 0 );
+        }
+        
+        void GenerateParameter( int parameterSetIndex )
+        {
             _writer.WriteStartElement( "command", "parameter", null );
             _writer.WriteAttributeString( "required", _parameter.Mandatory( parameterSetIndex ).ToString() );
             _writer.WriteAttributeString( "globbing", _parameter.Globbing.ToString() );
@@ -39,48 +47,50 @@ namespace PoshBuild
             _writer.WriteElementString( "maml", "name", null, _parameter.ParameterName );
 
             _writer.WriteStartElement( "maml", "description", null );
+
             _writer.WriteElementString( "maml", "para", null, _parameter.ParameterAttributes[ parameterSetIndex ].HelpMessage );
-            _writer.WriteEndElement(); // </maml:description>
-
-            _writer.WriteStartElement( "command", "parameterValue", null );
-
-            _writer.WriteAttributeString( "required", ( _parameter.ParameterType != typeof( SwitchParameter ) ).ToString() );
-            _writer.WriteAttributeString( "variableLength", ( typeof( IEnumerable ).IsAssignableFrom( _parameter.ParameterType ) ).ToString() );
-            _writer.WriteString( _parameter.ParameterType.GetPSPrettyName() );
-
-            _writer.WriteEndElement(); // </command:parameterValue>
-
-            _writer.WriteEndElement(); // </command:parameter>
-        }
-
-        public void GenerateCommandParameter()
-        {
-            _writer.WriteStartElement( "command", "parameter", null );
-            _writer.WriteAttributeString( "required", _parameter.Mandatory( 0 ).ToString() );
-            _writer.WriteAttributeString( "variableLength", ( typeof( IEnumerable ).IsAssignableFrom( _parameter.ParameterType ) ).ToString() );
-            _writer.WriteAttributeString( "globbing", _parameter.Globbing.ToString() );
-
-            string pipelineInput = GetPipelineInputAttributeString( 0 );
-            _writer.WriteAttributeString( "pipelineInput", pipelineInput );
-
-            string position = GetPositionAttributeString( 0 );
-            _writer.WriteAttributeString( "position", position );
-
-            _writer.WriteElementString( "maml", "name", null, _parameter.ParameterName );
-
-            _writer.WriteStartElement( "maml", "description", null );
-
-            _writer.WriteElementString( "maml", "para", null, _parameter.ParameterAttributes[ 0 ].HelpMessage );
 
             _writer.WriteEndElement(); // </maml:description>
 
-            _writer.WriteStartElement( "command", "parameterValue", null );
+            if ( _parameter.ParameterType.IsEnum )
+            {
+                var enumNames = _parameter.ParameterType.GetEnumNames();
 
-            _writer.WriteAttributeString( "required", ( _parameter.ParameterType != typeof( SwitchParameter ) ).ToString() );
-            _writer.WriteAttributeString( "variableLength", ( typeof( IEnumerable ).IsAssignableFrom( _parameter.ParameterType ) ).ToString() );
-            _writer.WriteString( _parameter.ParameterType.GetPSPrettyName() );
+                _writer.WriteStartElement( "command", "parameterValue", null );
 
-            _writer.WriteEndElement(); // </command:parameterValue>
+                _writer.WriteAttributeString( "required", "true" );
+                _writer.WriteAttributeString( "variableLength", "false" );
+                _writer.WriteString( string.Join( " | ", enumNames ) );
+
+                _writer.WriteEndElement(); // </command:parameterValue>
+
+                _writer.WriteStartElement( "dev", "possibleValues", null );
+
+                foreach ( var name in enumNames )
+                {
+                    _writer.WriteStartElement( "dev", "possibleValue", null );
+
+                    _writer.WriteElementString( "dev", "value", null, name );
+
+                    _writer.WriteStartElement( "maml", "description", null );
+                    _writer.WriteElementString( "maml", "para", null, string.Empty );
+                    _writer.WriteEndElement(); // </maml:description>
+
+                    _writer.WriteEndElement(); // </dev:possibleValue>
+                }
+
+                _writer.WriteEndElement(); // </dev:possibleValues>
+            }
+            else
+            {
+                _writer.WriteStartElement( "command", "parameterValue", null );
+
+                _writer.WriteAttributeString( "required", ( _parameter.ParameterType != typeof( SwitchParameter ) ).ToString() );
+                _writer.WriteAttributeString( "variableLength", ( typeof( IEnumerable ).IsAssignableFrom( _parameter.ParameterType ) ).ToString() );
+                _writer.WriteString( _parameter.ParameterType.GetPSPrettyName() );
+
+                _writer.WriteEndElement(); // </command:parameterValue>
+            }
 
             _writer.WriteStartElement( "dev", "type", null );
             _writer.WriteElementString( "maml", "name", null, _parameter.ParameterType.GetPSPrettyName() );
