@@ -35,19 +35,13 @@
     <Reference Include="Microsoft.Build.Framework" />
     <Reference Include="Microsoft.Build.Utilities" />
     <Reference Include="System" />
-    <Reference Include="System.Core">
-      <RequiredTargetFramework>3.5</RequiredTargetFramework>
-    </Reference>
+    <Reference Include="System.Core" />
     <Reference Include="System.Management.Automation, Version=3.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\Dependencies\PowerShellV3\System.Management.Automation.dll</HintPath>
     </Reference>
-    <Reference Include="System.Xml.Linq">
-      <RequiredTargetFramework>3.5</RequiredTargetFramework>
-    </Reference>
-    <Reference Include="System.Data.DataSetExtensions">
-      <RequiredTargetFramework>3.5</RequiredTargetFramework>
-    </Reference>
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
   </ItemGroup>
@@ -88,12 +82,32 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Xsl\XmlDocToMaml.xsl" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
+  <Target
+    Name="PoshBuild_CompileXsl">  
+    <PropertyGroup>
+      <xsltc_debug/>
+      <xsltc_debug Condition=" $(Configuration) == 'Debug' ">/debug</xsltc_debug>
+      <CompiledXslAssemblyName>$(AssemblyName).CompiledXsl</CompiledXslAssemblyName>
+      <CompiledXslAssemblyPath>$(IntermediateOutputPath)$(CompiledXslAssemblyName).dll</CompiledXslAssemblyPath>
+    </PropertyGroup>
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <Exec
+      Command='"$(TargetFrameworkSDKToolsDirectory)\xsltc.exe" "/out:$(CompiledXslAssemblyPath)" /version:1.0.0.0 $(xsltc_debug) /nologo /class:PoshBuild.Xsl.XmlDocToMaml Xsl\XmlDocToMaml.xsl' />
+    <ItemGroup>
+      <Reference Include="$(CompiledXslAssemblyName)">
+        <HintPath>$(CompiledXslAssemblyPath)</HintPath>
+        <Private>true</Private>
+      </Reference>    
+    </ItemGroup>
   </Target>
-  <Target Name="AfterBuild">
-  </Target>
-  -->
+  <PropertyGroup>
+    <BuildDependsOn>
+      PoshBuild_CompileXsl;
+      $(BuildDependsOn)
+    </BuildDependsOn>
+  </PropertyGroup>
 </Project>
