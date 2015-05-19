@@ -1,9 +1,11 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Management.Automation;
 using System.Reflection;
 using System.Xml;
 using System.Xml.XPath;
+using System.Xml.Xsl;
 
 namespace PoshBuild
 {
@@ -22,7 +24,24 @@ namespace PoshBuild
             if ( !File.Exists( xmlDocFile ) )
                 throw new FileNotFoundException( "File not found.", xmlDocFile );
 
-            _xpd = new XPathDocument( xmlDocFile );
+            // Transform the file. This makes the content of the various documentation elements well-structured
+            // and well-presented for maml use.
+            var xsl = new XslCompiledTransform();
+
+            // Note: The XSL transform is compiled prior to the C# build, and a reference to the compiled assembly
+            // is automatically (but transitively) added. This is done by the PoshBuild_CompileXsl target in PoshBuild.csproj.
+            // Other than at build-time, Visual Studio may indicate that Xsl.XmlDocToMaml could not be found - this
+            // "error" can normally be ignored. The uncompiled XSL transform is in Xsl\XmlDocToMaml.xsl.
+            xsl.Load( typeof( Xsl.XmlDocToMaml ) );
+
+            using ( var sw = new StringWriter() )
+            {
+                using ( var xw = XmlWriter.Create( sw ) )
+                    xsl.Transform( xmlDocFile, xw );
+
+                using ( var sr = new StringReader( sw.ToString() ) )
+                    _xpd = new XPathDocument( sr );
+            }            
         }
 
         bool WriteDescription( XmlWriter writer, MemberInfo member, string elementName )
@@ -43,9 +62,11 @@ namespace PoshBuild
                     break;
             }
 
-            if ( xe != null && !string.IsNullOrWhiteSpace( xe.Value ) )
+            if ( xe != null && xe.HasChildren )
             {
-                writer.WriteElementString( "maml", "para", null, xe.Value.Trim() );
+                foreach ( var child in xe.SelectChildren( XPathNodeType.Element ).OfType<XPathNavigator>() )
+                    writer.WriteNode( child, false );
+
                 return true;
             }
             else
