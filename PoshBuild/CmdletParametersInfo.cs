@@ -2,29 +2,25 @@
 using System.Collections.Generic;
 using System.Management.Automation;
 using System.Reflection;
-using PoshBuild.ComponentModel;
 
 namespace PoshBuild
 {
     sealed class CmdletParametersInfo
     {
-        public CmdletTypeProcessor Parent { get; private set; }
         public IList<CmdletParameterInfo> Parameters { get; private set; }
         public IDictionary<string, IList<CmdletParameterInfo>> ParametersByParameterSet { get; private set; }
 
-        public CmdletParametersInfo( CmdletTypeProcessor parent, Type cmdletType, ICmdletHelpDescriptor descriptor )
+        public CmdletParametersInfo( Type cmdletType, IDocSource docSource )
         {
             if ( cmdletType == null )
                 throw new ArgumentNullException( "cmdletType" );
-
-            Parent = parent;
 
             Parameters = new List<CmdletParameterInfo>();
             foreach ( PropertyInfo propertyInfo in cmdletType.GetProperties() )
             {
                 if ( Attribute.IsDefined( propertyInfo, typeof( ParameterAttribute ) ) )
                 {
-                    Parameters.Add( new CmdletParameterInfo( this, propertyInfo, descriptor ) );
+                    Parameters.Add( new CmdletParameterInfo( propertyInfo, docSource ) );
                 }
             }
 

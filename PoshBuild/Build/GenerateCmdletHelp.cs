@@ -1,10 +1,11 @@
-﻿using System.IO;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Xml;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
-using System.Collections.Generic;
-using System;
 using PoshBuild.ComponentModel;
 
 namespace PoshBuild.Build
@@ -15,11 +16,25 @@ namespace PoshBuild.Build
     /// </summary>
     public class GenerateCmdletHelp : AppDomainIsolatedTask
     {
+        enum DocSourceNames
+        {
+            Descriptor,
+            Reflection,
+            XmlDoc
+        }
+
         /// <summary>
         /// The assemblies to reflect Cmdlets from.
+        /// If <c>XmlDoc</c> source is being used, it is possible to specify a non-default XmlDoc file path using custom item metadata <c>%(XmlDocFilePath)</c>.
         /// </summary>
         [Required]
         public ITaskItem[] Assemblies { get; set; }
+
+        /// <summary>
+        /// The sources of documentation, in order of precidence (preferred source first). The identity of each item must be Descriptor, Reflection or XmlDoc.
+        /// Default is Descriptor, Reflection.
+        /// </summary>
+        public ITaskItem[] DocSources { get; set; }
 
         /// <summary>
         /// Assemblies that contain <see cref="ICmdletHelpDescriptor"/>s
@@ -40,44 +55,104 @@ namespace PoshBuild.Build
         /// <returns></returns>
         public override bool Execute()
         {
-            var sortedTypes = new Dictionary<string, List<Type>>();
-            foreach (var assemblyItem in Assemblies)
+            //System.Diagnostics.Debugger.Launch();
+
+            IEnumerable<DocSourceNames> docSourceNames = null;
+
+            if ( DocSources == null || DocSources.Length == 0 )
             {
-                string assemblyPath = assemblyItem.GetMetadata("FullPath");
-                string assemblyName = assemblyItem.GetMetadata("Filename");
-
-                Assembly assembly = Assembly.LoadFrom(assemblyPath);
-                var types = new List<Type>(assembly.GetExportedTypes());
-
-                string helpFile = Path.Combine(Path.GetDirectoryName(assemblyPath), AssemblyProcessor.GetHelpFileName(assemblyName));
-                sortedTypes.Add(helpFile, types);
+                docSourceNames = new DocSourceNames[] { DocSourceNames.Descriptor, DocSourceNames.Reflection };
             }
-
-            var descriptors = new List<ICmdletHelpDescriptor>();
-            if (DescriptorAssemblies != null)
+            else
             {
-                foreach (var assemblyItem in DescriptorAssemblies)
+                try
                 {
-                    Assembly assembly = Assembly.LoadFrom(assemblyItem.GetMetadata("FullPath"));
-                    var d = AssemblyProcessor.GetDescriptors( assembly );
-                    descriptors.AddRange(d);
+                    docSourceNames =
+                        DocSources
+                        .Select( ds => ( DocSourceNames ) Enum.Parse( typeof( DocSourceNames ), ds.ItemSpec ) );
+                }
+                catch ( Exception e )
+                {
+                    Log.LogError( "Failed to parse DocSources items: {0}", e.Message );
+                    return false;
                 }
             }
 
-            HelpFiles = new TaskItem[sortedTypes.Count];
-
-            int helpFileIndex = 0;
-            foreach (string helpFile in sortedTypes.Keys)
+            if ( docSourceNames.Count() != docSourceNames.Distinct().Count() )
             {
-                XmlWriterSettings writerSettings = new XmlWriterSettings();
-                writerSettings.Indent = true;
-                using (XmlWriter writer = XmlWriter.Create(helpFile, writerSettings))
-                {
-                    AssemblyProcessor.GenerateHelpFile( sortedTypes[ helpFile ], writer, descriptors );
-                }
-
-                HelpFiles[helpFileIndex++] = new TaskItem(helpFile);
+                Log.LogError( "The DocSources items must be unique." );
+                return false;
             }
+
+            IDictionary<Type, ICmdletHelpDescriptor> descriptors = null;
+
+            if ( DescriptorAssemblies != null && docSourceNames.Contains( DocSourceNames.Descriptor ) )
+            {
+                descriptors = DescriptorDocSource.GetDescriptors(
+                        DescriptorAssemblies
+                        .Select( item => Assembly.LoadFrom( item.GetMetadata( "FullPath" ) ) )
+                    );
+            }
+
+            var assyInfo = 
+                Assemblies
+                .Select(
+                    item =>
+                    {
+                        var assemblyPath = item.GetMetadata( "FullPath" );
+                        var assemblyName = item.GetMetadata( "Filename" );
+                        var assembly = Assembly.LoadFrom( assemblyPath );
+                        var xmlDocPath = item.GetMetadata( "XmlDocFilePath" );                        
+                        if ( string.IsNullOrEmpty( xmlDocPath ) )
+                            xmlDocPath = Path.Combine( Path.GetDirectoryName( assemblyPath ), assemblyName + ".xml" );
+
+                        var docSources =
+                            docSourceNames
+                            .Select(
+                                dsn =>
+                                {
+                                    switch ( dsn )
+                                    {
+                                        case DocSourceNames.Descriptor:
+                                            return ( IDocSource ) new DescriptorDocSource( descriptors );
+                                        case DocSourceNames.Reflection:
+                                            return ( IDocSource ) new ReflectionDocSource();
+                                        case DocSourceNames.XmlDoc:
+                                            return ( IDocSource ) new XmlDocSource( xmlDocPath );
+                                        default:
+                                            throw new NotImplementedException();
+                                    }
+                                }
+                            )
+                            .ToList();
+
+                        return new
+                        {
+                            AssemblyPath = assemblyPath,
+                            AssemblyName = assemblyName,
+                            XmlDocPath = xmlDocPath,
+                            HelpFilePath = Path.Combine( Path.GetDirectoryName( assemblyPath ), AssemblyProcessor.GetHelpFileName( assemblyName ) ),
+                            Assembly = assembly,
+                            Types = assembly.GetExportedTypes(),
+                            DocSource = new FallthroughDocSource( docSources )
+                        };
+                    } );
+
+
+
+            var helpFiles = new List<ITaskItem>();
+            XmlWriterSettings writerSettings = new XmlWriterSettings();
+            writerSettings.Indent = true;
+
+            foreach ( var item in assyInfo )
+            {
+                using ( XmlWriter writer = XmlWriter.Create( item.HelpFilePath, writerSettings ) )
+                    new AssemblyProcessor( writer, item.Types, item.DocSource ).GenerateHelpFile();
+
+                helpFiles.Add( new TaskItem( item.HelpFilePath ) );
+            }
+
+            HelpFiles = helpFiles.ToArray();
 
             return true;
         }

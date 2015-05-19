@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
-namespace PoshBuild.ComponentModel
+﻿namespace PoshBuild.ComponentModel
 {
     /// <summary>
     /// Interface for a Cmdlet help descriptor.
@@ -29,6 +24,6 @@ namespace PoshBuild.ComponentModel
         /// </summary>
         /// <param name="propertyName"></param>
         /// <returns></returns>
-        GlobbingAttribute GetGlobbing(string propertyName);
+        GlobbingAttribute GetGlobbing( string propertyName, string parameterSetName );
     }
 }

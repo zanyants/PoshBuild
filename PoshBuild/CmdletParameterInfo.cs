@@ -1,82 +1,120 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Management.Automation;
 using System.Reflection;
-using PoshBuild.ComponentModel;
 
 namespace PoshBuild
 {
     sealed class CmdletParameterInfo
     {
-        public CmdletParametersInfo Parent { get; private set; }
+        public const int NonSpecificParameterSetIndex = -1;
+
+        IDocSource _docSource;
+        public PropertyInfo PropertyInfo { get; private set; }
         public string ParameterName { get; private set; }
         public Type ParameterType { get; private set; }
         public IList<ParameterAttribute> ParameterAttributes { get; private set; }
-        public GlobbingAttribute GlobbingAttribute { get; private set; }
         public DefaultValueAttribute DefaultValueAttribute { get; private set; }
+        public AliasAttribute AliasAttribute { get; private set; }
 
         public int ParameterSetCount { get { return ParameterAttributes.Count; } }
-        public bool Globbing { get { return GlobbingAttribute != null ? GlobbingAttribute.SupportsGlobbing : false; } }
         public object DefaultValue { get { return DefaultValueAttribute != null ? DefaultValueAttribute.Value : string.Empty; } }
 
-        public CmdletParameterInfo( CmdletParametersInfo parent, PropertyInfo propertyInfo, ICmdletHelpDescriptor descriptor )
+        public CmdletParameterInfo( PropertyInfo propertyInfo, IDocSource docSource)
         {
-            Parent = parent;
+            if ( docSource == null )
+                throw new ArgumentNullException( "docSource" );
+
+            if ( propertyInfo == null )
+                throw new ArgumentNullException( "propertyInfo" );
+
+            _docSource = docSource;
+            
+            PropertyInfo = propertyInfo;
             ParameterName = propertyInfo.Name;
             ParameterType = propertyInfo.PropertyType;
 
-            ParameterAttributes = new List<ParameterAttribute>();
-            Attribute[] parameterAttributes = Attribute.GetCustomAttributes( propertyInfo, typeof( ParameterAttribute ) );
-            foreach ( var parameterAttribute in parameterAttributes )
-            {
-                ParameterAttributes.Add( ( ParameterAttribute ) parameterAttribute );
-            }
+            ParameterAttributes = Attribute.GetCustomAttributes( propertyInfo, typeof( ParameterAttribute ) ).OfType<ParameterAttribute>().ToList();
+            
             if ( ParameterAttributes.Count == 0 )
-                throw new ArgumentException( "The given property doesn't have a ParameterAttribute attribute." );
-
-            if ( descriptor != null )
-                GlobbingAttribute = descriptor.GetGlobbing( propertyInfo.Name );
-            if ( GlobbingAttribute == null )
-                GlobbingAttribute = ( GlobbingAttribute ) Attribute.GetCustomAttribute( propertyInfo, typeof( GlobbingAttribute ) );
+                throw new ArgumentException( "The specified property doesn't have a ParameterAttribute attribute." );
 
             DefaultValueAttribute = ( DefaultValueAttribute ) Attribute.GetCustomAttribute( propertyInfo, typeof( DefaultValueAttribute ) );
+            AliasAttribute = ( AliasAttribute ) Attribute.GetCustomAttribute( propertyInfo, typeof( AliasAttribute ) );
         }
 
         public int GetParameterSetIndex( string parameterSetName )
         {
+            int allSetsIndex = -1;
             int index = 0;
             foreach ( var parameterAttribute in ParameterAttributes )
             {
                 if ( parameterAttribute.ParameterSetName == parameterSetName )
                     return index;
+
+                if ( parameterAttribute.ParameterSetName == ParameterAttribute.AllParameterSets )
+                    allSetsIndex = index;
+
                 index++;
             }
+
+            if ( allSetsIndex != -1 )
+                return allSetsIndex;
+
             throw new KeyNotFoundException( "The parameter set name was specified for this parameter." );
+        }
+
+        public bool Globbing( int parameterSetIndex )
+        {
+            if ( parameterSetIndex == NonSpecificParameterSetIndex )
+                return Enumerable.Range( 0, ParameterAttributes.Count ).Any( i => Globbing( i ) );
+
+            bool supportsGlobbing = false;
+            if ( _docSource.TryGetPropertySupportsGlobbing( PropertyInfo, ParameterAttributes[ parameterSetIndex ].ParameterSetName, out supportsGlobbing ) )
+                return supportsGlobbing;
+            else
+                return false;
         }
 
         public bool Mandatory( int parameterSetIndex )
         {
+            if ( parameterSetIndex == NonSpecificParameterSetIndex )
+                return Enumerable.Range( 0, ParameterAttributes.Count ).Any( i => Mandatory( i ) );
+
             return ParameterAttributes[ parameterSetIndex ].Mandatory;
         }
 
         public int Position( int parameterSetIndex )
         {
+            if ( parameterSetIndex == NonSpecificParameterSetIndex )
+                return Enumerable.Range( 0, ParameterAttributes.Count ).Min( i => Position( i ) );
+
             return ParameterAttributes[ parameterSetIndex ].Position;
         }
 
         public bool ValueFromPipeline( int parameterSetIndex )
         {
+            if ( parameterSetIndex == NonSpecificParameterSetIndex )
+                return Enumerable.Range( 0, ParameterAttributes.Count ).Any( i => ValueFromPipeline( i ) );
+
             return ParameterAttributes[ parameterSetIndex ].ValueFromPipeline;
         }
 
         public bool ValueFromPipelineByPropertyName( int parameterSetIndex )
         {
+            if ( parameterSetIndex == NonSpecificParameterSetIndex )
+                return Enumerable.Range( 0, ParameterAttributes.Count ).Any( i => ValueFromPipelineByPropertyName( i ) );
+
             return ParameterAttributes[ parameterSetIndex ].ValueFromPipelineByPropertyName;
         }
 
         public bool ValueFromRemaingArguments( int parameterSetIndex )
         {
+            if ( parameterSetIndex == NonSpecificParameterSetIndex )
+                return Enumerable.Range( 0, ParameterAttributes.Count ).Any( i => ValueFromRemaingArguments( i ) );
+
             return ParameterAttributes[ parameterSetIndex ].ValueFromRemainingArguments;
         }
 

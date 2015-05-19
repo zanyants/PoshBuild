@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Linq;
 using System.Management.Automation;
 using System.Xml;
 
@@ -9,8 +10,9 @@ namespace PoshBuild
     {
         XmlWriter _writer;
         CmdletParameterInfo _parameter;
-
-        public CmdletParameterProcessor( XmlWriter writer, CmdletParameterInfo parameter )
+        IDocSource _docSource;
+        
+        public CmdletParameterProcessor( XmlWriter writer, CmdletParameterInfo parameter, IDocSource docSource )
         {
             if ( writer == null )
                 throw new ArgumentNullException( "writer" );
@@ -18,8 +20,12 @@ namespace PoshBuild
             if ( parameter == null )
                 throw new ArgumentNullException( "parameter" );
 
+            if ( docSource == null )
+                throw new ArgumentNullException( "docSource" );
+
             _writer = writer;
             _parameter = parameter;
+            _docSource = docSource;
         }
 
         public void GenerateCommandSyntaxParameter( string parameterSetName )
@@ -29,14 +35,14 @@ namespace PoshBuild
 
         public void GenerateCommandParameter()
         {
-            GenerateParameter( 0 );
+            GenerateParameter( CmdletParameterInfo.NonSpecificParameterSetIndex );
         }
         
         void GenerateParameter( int parameterSetIndex )
         {
             _writer.WriteStartElement( "command", "parameter", null );
-            _writer.WriteAttributeString( "required", _parameter.Mandatory( parameterSetIndex ).ToString() );
-            _writer.WriteAttributeString( "globbing", _parameter.Globbing.ToString() );
+            _writer.WriteAttributeString( "required", _parameter.Mandatory( parameterSetIndex ).ToStringLower() );
+            _writer.WriteAttributeString( "globbing", _parameter.Globbing( parameterSetIndex ).ToStringLower() );
 
             string pipelineInput = GetPipelineInputAttributeString( parameterSetIndex );
             _writer.WriteAttributeString( "pipelineInput", pipelineInput );
@@ -44,11 +50,24 @@ namespace PoshBuild
             string position = GetPositionAttributeString( parameterSetIndex );
             _writer.WriteAttributeString( "position", position );
 
+            if ( _parameter.AliasAttribute != null )
+            {
+                var aliases = _parameter.AliasAttribute.AliasNames.Aggregate( ( w, n ) => w + "," + n );
+
+                if ( !string.IsNullOrEmpty( aliases ) )
+                    _writer.WriteAttributeString( "aliases", aliases );
+            }
+
             _writer.WriteElementString( "maml", "name", null, _parameter.ParameterName );
 
             _writer.WriteStartElement( "maml", "description", null );
 
-            _writer.WriteElementString( "maml", "para", null, _parameter.ParameterAttributes[ parameterSetIndex ].HelpMessage );
+            _docSource.WriteParameterDescription( 
+                _writer, 
+                _parameter.PropertyInfo, 
+                parameterSetIndex == CmdletParameterInfo.NonSpecificParameterSetIndex ? 
+                    null : 
+                    _parameter.ParameterAttributes[ parameterSetIndex ].ParameterSetName );
 
             _writer.WriteEndElement(); // </maml:description>
 
@@ -85,8 +104,8 @@ namespace PoshBuild
             {
                 _writer.WriteStartElement( "command", "parameterValue", null );
 
-                _writer.WriteAttributeString( "required", ( _parameter.ParameterType != typeof( SwitchParameter ) ).ToString() );
-                _writer.WriteAttributeString( "variableLength", ( typeof( IEnumerable ).IsAssignableFrom( _parameter.ParameterType ) ).ToString() );
+                _writer.WriteAttributeString( "required", ( _parameter.ParameterType != typeof( SwitchParameter ) ).ToStringLower() );
+                _writer.WriteAttributeString( "variableLength", ( typeof( IEnumerable ).IsAssignableFrom( _parameter.ParameterType ) ).ToStringLower() );
                 _writer.WriteString( _parameter.ParameterType.GetPSPrettyName() );
 
                 _writer.WriteEndElement(); // </command:parameterValue>
