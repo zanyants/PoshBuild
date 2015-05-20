@@ -15,6 +15,16 @@ namespace PoshBuild
     sealed class XmlDocSource : DocSource
     {
         XPathDocument _xpd;
+        static readonly XmlNamespaceManager _namespaceResolver;
+
+        static XmlDocSource()
+        {
+            _namespaceResolver = new XmlNamespaceManager( new NameTable() );
+            _namespaceResolver.AddNamespace( "msh", "http://msh" );
+            _namespaceResolver.AddNamespace( "maml", "http://schemas.microsoft.com/maml/2004/10" );
+            _namespaceResolver.AddNamespace( "command", "http://schemas.microsoft.com/maml/dev/command/2004/10" );
+            _namespaceResolver.AddNamespace( "dev", "http://schemas.microsoft.com/maml/dev/2004/10" );
+        }
 
         public XmlDocSource( string xmlDocFile )
         {
@@ -57,7 +67,7 @@ namespace PoshBuild
 
             foreach ( var q in subQueries )
             {
-                xe = _xpd.CreateNavigator().SelectSingleNode( string.Format( "/doc/members/member[@name='{0}']/{1}", id, q ) );
+                xe = _xpd.CreateNavigator().SelectSingleNode( string.Format( "/doc/members/member[@name='{0}']/{1}", id, q ), _namespaceResolver );
                 if ( xe != null )
                     break;
             }
@@ -102,6 +112,28 @@ namespace PoshBuild
         {
             return WriteDescriptionEx( writer, cmdlet, string.Format( "psoutput[@type='{0}']", outputTypeName ) );
         }
+
+        public override bool WriteInputTypeDescription( XmlWriter writer, Type cmdlet, string inputTypeName )
+        {
+            return WriteDescriptionEx( writer, cmdlet, string.Format( "psinput[@type='{0}']", inputTypeName ) );
+        }
+
+        public override bool WriteCmdletExamples( XmlWriter writer, Type cmdlet )
+        {
+            var id = GetIdentifier( cmdlet );
+
+            var examples = _xpd.CreateNavigator().Select( string.Format( "/doc/members/member[@name='{0}']/example/command:example", id ), _namespaceResolver );
+
+            bool didWrite = false;
+
+            foreach ( var example in examples )
+            {
+                writer.WriteNode( ( XPathNavigator ) example, false );
+                didWrite = true;
+            }
+
+            return didWrite;
+       }
 
         public override bool TryGetPropertySupportsGlobbing( PropertyInfo property, string parameterSetName, out bool supportsGlobbing )
         {

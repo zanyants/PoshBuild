@@ -76,5 +76,26 @@ namespace PoshBuild
             }
             return false;
         }
+
+        public bool WriteCmdletExamples( XmlWriter writer, Type cmdlet )
+        {
+            foreach ( var source in _sources )
+            {
+                if ( source.WriteCmdletExamples( writer, cmdlet ) )
+                    return true;
+            }
+            return false;
+        }
+
+
+        public bool WriteInputTypeDescription( XmlWriter writer, Type cmdlet, string inputTypeName )
+        {
+            foreach ( var source in _sources )
+            {
+                if ( source.WriteInputTypeDescription( writer, cmdlet, inputTypeName ) )
+                    return true;
+            }
+            return false;
+        }
     }
 }

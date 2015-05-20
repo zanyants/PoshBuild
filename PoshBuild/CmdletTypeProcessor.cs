@@ -46,8 +46,10 @@ namespace PoshBuild
             GenerateCommandDescription();
             GenerateCommandSyntax();
             GenerateCommandParameters();
+            GenerateCommandInputTypes();
             GenerateCommandReturnValues();
-            
+            GenerateCommandExamples();
+
             _writer.WriteEndElement(); // </command:command>
         }
         
@@ -66,6 +68,67 @@ namespace PoshBuild
             _writer.WriteEndElement(); // </command:details>
         }
 
+        void GenerateCommandInputTypes()
+        {
+            var pipeableParameters = 
+                _parametersInfo
+                .Parameters
+                .Where( cpi => cpi.ParameterAttributes.Any( pa => pa.ValueFromPipeline || pa.ValueFromPipelineByPropertyName ) );
+
+            var byType =
+                pipeableParameters
+                .GroupBy( cpi => cpi.ParameterType )
+                .Select( group => new { Group = group, PrettyName = TypeNameHelper.GetPSPrettyName( group.Key ) } )
+                .OrderBy( item => item.PrettyName )
+                .ToList();
+
+            if ( byType.Count > 0 )
+            {
+                _writer.WriteStartElement( "command", "inputTypes", null );
+
+                foreach ( var item in byType )
+                {
+                    _writer.WriteStartElement( "command", "inputType", null );
+
+                    _writer.WriteStartElement( "dev", "type", null );
+
+                    _writer.WriteElementString( "maml", "name", null, item.PrettyName );
+                    _writer.WriteElementString( "maml", "uri", null, string.Empty );
+                    // This description element is *not* read by Get-Help.
+                    _writer.WriteElementString( "maml", "description", null, string.Empty );
+
+                    _writer.WriteEndElement(); // </dev:type>
+
+                    // This description element *is* read by Get-Help.
+                    _writer.WriteStartElement( "maml", "description", null );
+
+                    if ( !_docSource.WriteInputTypeDescription( _writer, _type, item.Group.Key.FullName ) )
+                    {
+                        // If no user-supplied documentation, auto-generate a default description.
+                        var parameterNames =
+                            item
+                            .Group
+                            .Select( cpi => cpi.ParameterName )
+                            .OrderBy( s => s, StringComparer.InvariantCultureIgnoreCase )
+                            .ToList();
+
+                        var text = string.Format( 
+                            "You can pipe values for {0} to the {1}-{2} cmdlet.", 
+                            parameterNames.JoinWithAnd(), 
+                            _cmdletAttribute.VerbName, 
+                            _cmdletAttribute.NounName );
+
+                        _writer.WriteElementString( "maml", "description", null, text );
+                    }
+
+                    _writer.WriteEndElement(); // </maml:description>
+
+                    _writer.WriteEndElement(); // </command:inputType>
+                }
+
+                _writer.WriteEndElement(); // </command:inputTypes>
+            }
+        }
         void GenerateCommandReturnValues()
         {
             var attributes = _type.GetCustomAttributes( typeof( OutputTypeAttribute ), true ).OfType<OutputTypeAttribute>().ToList();
@@ -94,19 +157,21 @@ namespace PoshBuild
                         // This description element *is* read by Get-Help.
                         _writer.WriteStartElement( "maml", "description", null );
 
-                        _docSource.WriteReturnValueDescription( _writer, _type, type.Type == null ? type.Name : type.Type.FullName );
-
-                        if ( !string.IsNullOrWhiteSpace( attr.ProviderCmdlet ) )
-                            _writer.WriteElementString( "maml", "para", null, string.Format( "Applies to Provider Cmdlet '{0}'.", attr.ProviderCmdlet ) );
-
-                        if ( parameterSetNames != null && parameterSetNames.Count > 0 )
+                        if ( !_docSource.WriteReturnValueDescription( _writer, _type, type.Type == null ? type.Name : type.Type.FullName ) )
                         {
-                            _writer.WriteElementString( "maml", "para", null, "Applies to parameter sets:" );
+                            // If no user-supplied documentation, auto-generate a default description.
 
-                            foreach ( var name in parameterSetNames )
-                                _writer.WriteElementString( "maml", "para", null, "-- " + name );
+                            if ( !string.IsNullOrWhiteSpace( attr.ProviderCmdlet ) )
+                                _writer.WriteElementString( "maml", "para", null, string.Format( "Applies to Provider Cmdlet '{0}'.", attr.ProviderCmdlet ) );
+
+                            if ( parameterSetNames != null && parameterSetNames.Count > 0 )
+                            {
+                                _writer.WriteElementString( "maml", "para", null, "Applies to parameter sets:" );
+
+                                foreach ( var name in parameterSetNames )
+                                    _writer.WriteElementString( "maml", "para", null, "-- " + name );
+                            }
                         }
-
                         _writer.WriteEndElement(); // </maml:description>
 
                         _writer.WriteEndElement(); // </command:returnValue>
@@ -151,6 +216,13 @@ namespace PoshBuild
                 new CmdletParameterProcessor( _writer, parameterInfo, _docSource ).GenerateCommandParameter();
 
             _writer.WriteEndElement(); // </command:parameters>
+        }
+
+        void GenerateCommandExamples()
+        {
+            _writer.WriteStartElement( "command", "examples", null );
+            _docSource.WriteCmdletExamples( _writer, _type );
+            _writer.WriteEndElement(); // </command:examples>
         }
     }
 }

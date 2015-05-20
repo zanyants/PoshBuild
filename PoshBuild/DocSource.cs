@@ -34,5 +34,15 @@ namespace PoshBuild
         {
             return false;
         }
+
+        virtual public bool WriteCmdletExamples( XmlWriter writer, Type cmdlet )
+        {
+            return false;
+        }
+
+        virtual public bool WriteInputTypeDescription( XmlWriter writer, Type cmdlet, string inputTypeName )
+        {
+            return false;
+        }
     }
 }

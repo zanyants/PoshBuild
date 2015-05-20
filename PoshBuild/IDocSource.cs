@@ -29,10 +29,22 @@ namespace PoshBuild
         bool WriteParameterDescription( XmlWriter writer, PropertyInfo property, string parameterSetName );
 
         /// <summary>
+        /// Writes a cmdlet examples. The writer should be positioned within a <c>&lt;command:examples></c> element.
+        /// </summary>
+        /// <returns><c>true</c> if example information was written; otherwise <c>false</c>.</returns>
+        bool WriteCmdletExamples( XmlWriter writer, Type cmdlet );
+
+        /// <summary>
         /// Writes an cmdlet return value description. The writer should be positioned within a <c>&lt;maml:description></c> element.
         /// </summary>
         /// <returns><c>true</c> if description information was written; otherwise <c>false</c>.</returns>
         bool WriteReturnValueDescription( XmlWriter writer, Type cmdlet, string outputTypeName );
+
+        /// <summary>
+        /// Writes an cmdlet input type description. The writer should be positioned within a <c>&lt;maml:description></c> element.
+        /// </summary>
+        /// <returns><c>true</c> if description information was written; otherwise <c>false</c>.</returns>
+        bool WriteInputTypeDescription( XmlWriter writer, Type cmdlet, string inputTypeName );
         
         /// <summary>
         /// Attempts to get a value indicating if a property supports globbing when appearing in a particular parameterset.

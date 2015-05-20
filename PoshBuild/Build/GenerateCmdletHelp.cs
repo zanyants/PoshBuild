@@ -55,8 +55,6 @@ namespace PoshBuild.Build
         /// <returns></returns>
         public override bool Execute()
         {
-            //System.Diagnostics.Debugger.Launch();
-
             IEnumerable<DocSourceNames> docSourceNames = null;
 
             if ( DocSources == null || DocSources.Length == 0 )
