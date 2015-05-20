@@ -39,11 +39,11 @@
   </xsl:template>
   
   <!-- Special case for psexample elements. -->
-  <xsl:template match="psexample" mode="member">
+  <xsl:template match="example/psexample" mode="memberContent">
     <xsl:if test="not(*[1][name()='code'])">
       <xsl:message terminate="yes">psexample elements must have a code element as the first child.</xsl:message>
     </xsl:if>
-    <xsl:copy>
+<command:example>
 <maml:title>
       
 -------------------------- EXAMPLE <xsl:value-of select="count(preceding-sibling::psexample) + 1"/> --------------------------     
@@ -53,11 +53,11 @@
   <maml:para>PS C:\&gt; </maml:para>
 </maml:introduction>
       <xsl:apply-templates select="@* | node()" mode="memberContent"/>
-    </xsl:copy>      
+</command:example>
   </xsl:template>
 
   <!-- Transform first psexample/code to dev:code -->
-  <xsl:template match="psexample/code[1]" mode="memberContent">
+  <xsl:template match="example/psexample/code[1]" mode="memberContent">
     <dev:code>
       <xsl:apply-templates select="@* | node()" mode="memberContent"/>
     </dev:code>
