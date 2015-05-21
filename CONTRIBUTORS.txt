@@ -1,5 +1,0 @@
-The original 0.1.0 release of PoshBuild was written by Ludovic Chabant, copyright 2008 Electronic Arts Inc, released under the Microsoft Public License (Ms-PL).
-
-Subsequent contributions have been made by:
-
-Tom Glastonbury on behalf of Zany Ants Limited
