@@ -120,7 +120,7 @@ namespace PoshBuild
                             _cmdletAttribute.VerbName, 
                             _cmdletAttribute.NounName );
 
-                        _writer.WriteElementString( "maml", "description", null, text );
+                        _writer.WriteElementString( "maml", "para", null, text );
                     }
 
                     _writer.WriteEndElement(); // </maml:description>
