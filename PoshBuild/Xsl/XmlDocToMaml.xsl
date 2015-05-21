@@ -52,7 +52,7 @@
       <xsl:message terminate="yes">psexample elements must have a code element as the first child (see example element for member <xsl:value-of select="../../@name"/>)</xsl:message>
     </xsl:if>
 <command:example>
-<maml:title>
+<maml:title xml:space="preserve">
       
 -------------------------- EXAMPLE <xsl:value-of select="count(preceding-sibling::psexample) + 1"/> --------------------------     
 
@@ -74,7 +74,7 @@
   <!-- Transform all para to maml:para -->
   <xsl:template match="para" mode="memberContent">
     <maml:para>
-      <xsl:apply-templates select="@* | node()" mode="memberContent"/>    
+      <xsl:apply-templates select="@* | node()" mode="memberContent"/>
     </maml:para>
   </xsl:template>
 
@@ -82,7 +82,9 @@
   <xsl:template match="psrelated" mode="member">
     <psrelated>
       <maml:navigationLink>
-        <maml:linkText><xsl:value-of select="."/></maml:linkText>
+        <maml:linkText>
+          <xsl:value-of select="normalize-space()"/>
+        </maml:linkText>
       </maml:navigationLink>
     </psrelated>
   </xsl:template>
@@ -96,7 +98,9 @@
       <xsl:message terminate="yes">The title element must be the first child of psnote, and may not be preceded by text (see remarks element for member <xsl:value-of select="../../@name"/>)</xsl:message>
     </xsl:if>
     <psnote>
-      <maml:title><xsl:value-of select="title"/></maml:title>
+      <maml:title>
+        <xsl:value-of select="normalize-space(title)"/>
+      </maml:title>
       <maml:alert>
         <xsl:apply-templates select="node()" mode="memberContent"/>
       </maml:alert>
@@ -115,11 +119,11 @@
   </xsl:template>
   
   <xsl:template match="item[term and description]" mode="bulletList">
-    <maml:para>-- <xsl:value-of select="term"/>: <xsl:value-of select="description"/></maml:para>
+    <maml:para>-- <xsl:value-of select="normalize-space(term)"/>: <xsl:value-of select="normalize-space(description)"/></maml:para>
   </xsl:template>
 
   <xsl:template match="item[not(term and description)]" mode="bulletList">
-    <maml:para>-- <xsl:value-of select="."/></maml:para>
+    <maml:para>-- <xsl:value-of select="normalize-space()"/></maml:para>
   </xsl:template>
   
   <!-- number-type list -->
@@ -138,7 +142,7 @@
         </xsl:otherwise>
       </xsl:choose>
     </xsl:variable>
-    <maml:para><xsl:value-of select="$numberListStart + count(preceding-sibling::item)"/>: <xsl:value-of select="term"/> (<xsl:value-of select="description"/>)</maml:para>
+    <maml:para><xsl:value-of select="$numberListStart + count(preceding-sibling::item)"/>: <xsl:value-of select="normalize-space(term)"/> (<xsl:value-of select="normalize-space(description)"/>)</maml:para>
   </xsl:template>
 
   <xsl:template match="item[not(term and description)]" mode="numberList">
@@ -152,7 +156,7 @@
         </xsl:otherwise>
       </xsl:choose>
     </xsl:variable>
-    <maml:para><xsl:value-of select="$numberListStart + count(preceding-sibling::item)"/>: <xsl:value-of select="."/></maml:para>
+    <maml:para><xsl:value-of select="$numberListStart + count(preceding-sibling::item)"/>: <xsl:value-of select="normalize-space()"/></maml:para>
   </xsl:template>
 
   <!-- definition-type list -->
@@ -161,8 +165,8 @@
   </xsl:template>
   
   <xsl:template match="item[term and description]" mode="definitionList">
-    <maml:para><xsl:value-of select="term"/>:</maml:para>
-    <maml:para>-- <xsl:value-of select="description"/></maml:para>
+    <maml:para><xsl:value-of select="normalize-space(term)"/>:</maml:para>
+    <maml:para>-- <xsl:value-of select="normalize-space(description)"/></maml:para>
     <maml:para/>
   </xsl:template>
 
@@ -183,21 +187,21 @@
   </xsl:template>
   
   <xsl:template match="term" mode="tableListRow">
-    <xsl:if test="count(preceding-sibling::term) > 0">, </xsl:if><xsl:value-of select="."/>
+    <xsl:if test="count(preceding-sibling::term) > 0">, </xsl:if><xsl:value-of select="normalize-space()"/>
   </xsl:template>
   
   <xsl:template match="description" mode="tableListRow">
-    <xsl:if test="count(preceding-sibling::description) > 0">, </xsl:if><xsl:value-of select="."/>
+    <xsl:if test="count(preceding-sibling::description) > 0">, </xsl:if><xsl:value-of select="normalize-space()"/>
   </xsl:template>
 
   <!-- table row *is* of term-defintion style -->
   <xsl:template match="listheader[ count(term) = 1 and count(description) = 1 ] | item[ count(term) = 1 and count(description) = 1 ]" mode="tableList">
-    <maml:para><xsl:value-of select="term"/>, <xsl:value-of select="description"/></maml:para>
+    <maml:para><xsl:value-of select="normalize-space(term)"/>, <xsl:value-of select="normalize-space(description)"/></maml:para>
   </xsl:template>
   
   <!-- For any other elements within member/* elements, replace with inner text (eg, <c>, <see>) -->
   <xsl:template match="*" mode="memberContent">
-    <xsl:value-of select="string()"/>
+    <xsl:value-of select="normalize-space()"/>
   </xsl:template>
   
   <!-- For any member/* elements without special-case handling (currently only psexample has special case), copy

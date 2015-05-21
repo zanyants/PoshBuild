@@ -36,23 +36,33 @@ namespace PoshBuild
 
             // Transform the file. This makes the content of the various documentation elements well-structured
             // and well-presented for maml use.
-            var xsl = new XslCompiledTransform();
+            var xslXmlDocToMaml = new XslCompiledTransform();
+            var xslNormalizeWhitespace = new XslCompiledTransform();
 
             // Note: The XSL transform is compiled prior to the C# build, and a reference to the compiled assembly
             // is automatically (but transitively) added. This is done by the PoshBuild_CompileXsl target in PoshBuild.csproj.
             // Other than at build-time, Visual Studio may indicate that Xsl.XmlDocToMaml could not be found - this
             // "error" can normally be ignored. The uncompiled XSL transform is in Xsl\XmlDocToMaml.xsl.
-            xsl.Load( typeof( Xsl.XmlDocToMaml ) );
+            xslXmlDocToMaml.Load( typeof( Xsl.XmlDocToMaml ) );
+            xslNormalizeWhitespace.Load( typeof( Xsl.NormalizeWhitespace ) );
 
             try
             {
                 using ( var sw = new StringWriter() )
                 {
                     using ( var xw = XmlWriter.Create( sw ) )
-                        xsl.Transform( xmlDocFile, xw );
+                        xslXmlDocToMaml.Transform( xmlDocFile, xw );
 
-                    using ( var sr = new StringReader( sw.ToString() ) )
-                        _xpd = new XPathDocument( sr );
+                    using ( var sw2 = new StringWriter() )
+                    {
+                        using ( var sr = new StringReader( sw.ToString() ) )
+                        using ( var xr = XmlReader.Create( sr ) )
+                        using ( var xw2 = XmlWriter.Create( sw2 ) )
+                            xslNormalizeWhitespace.Transform( xr, xw2 );
+
+                        using ( var sr2 = new StringReader( sw2.ToString() ) )
+                            _xpd = new XPathDocument( sr2 );
+                    }                        
                 }
             }
             catch ( XsltException e )

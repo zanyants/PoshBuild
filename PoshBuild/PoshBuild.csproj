@@ -78,6 +78,7 @@
     <Compile Include="XmlDocSource.cs" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="NuGet\PoshBuild.nuspec" />
     <None Include="NuGet\PoshBuild.targets">
       <SubType>Designer</SubType>
     </None>
@@ -87,7 +88,14 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Xsl\XmlDocToMaml.xsl" />
+    <None Include="Xsl\XmlDocToMaml.xsl">
+      <SubType>Designer</SubType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Xsl\NormalizeWhitespace.xsl">
+      <SubType>Designer</SubType>
+    </None>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="PoshBuild_CompileXsl">
@@ -98,7 +106,7 @@
       <CompiledXslAssemblyPath>$(IntermediateOutputPath)$(CompiledXslAssemblyName).dll</CompiledXslAssemblyPath>
     </PropertyGroup>
     <MakeDir Directories="$(IntermediateOutputPath)" />
-    <Exec Command="&quot;$(TargetFrameworkSDKToolsDirectory)\xsltc.exe&quot; &quot;/out:$(CompiledXslAssemblyPath)&quot; /version:1.0.0.0 $(xsltc_debug) /nologo /class:PoshBuild.Xsl.XmlDocToMaml Xsl\XmlDocToMaml.xsl" />
+    <Exec Command="&quot;$(TargetFrameworkSDKToolsDirectory)\xsltc.exe&quot; &quot;/out:$(CompiledXslAssemblyPath)&quot; /version:1.0.0.0 $(xsltc_debug) /nologo /class:PoshBuild.Xsl.XmlDocToMaml Xsl\XmlDocToMaml.xsl /class:PoshBuild.Xsl.NormalizeWhitespace Xsl\NormalizeWhitespace.xsl" />
     <ItemGroup>
       <Reference Include="$(CompiledXslAssemblyName)">
         <HintPath>$(CompiledXslAssemblyPath)</HintPath>
