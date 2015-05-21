@@ -7,7 +7,7 @@
     <authors>PoshBuild Contributors</authors>
     <owners>Zany Ants</owners>
     <licenseUrl>http://opensource.org/licenses/MS-PL</licenseUrl>
-    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <copyright>Copyright 2008 - 2015 PoshBuild Contributors.</copyright>
     <projectUrl>https://github.com/zanyants/PoshBuild</projectUrl>
     <summary>Generates PowerShell help files and display format files as part of the build process for PowerShell snap-ins and binary modules.</summary>
