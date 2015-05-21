@@ -97,5 +97,25 @@ namespace PoshBuild
             }
             return false;
         }
+
+        public bool WriteCmdletNotes( XmlWriter writer, Type cmdlet )
+        {
+            foreach ( var source in _sources )
+            {
+                if ( source.WriteCmdletNotes( writer, cmdlet ) )
+                    return true;
+            }
+            return false;
+        }
+
+        public bool WriteCmdletRelatedLinks( XmlWriter writer, Type cmdlet )
+        {
+            foreach ( var source in _sources )
+            {
+                if ( source.WriteCmdletRelatedLinks( writer, cmdlet ) )
+                    return true;
+            }
+            return false;
+        }
     }
 }

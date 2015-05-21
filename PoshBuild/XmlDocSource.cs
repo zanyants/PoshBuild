@@ -44,14 +44,35 @@ namespace PoshBuild
             // "error" can normally be ignored. The uncompiled XSL transform is in Xsl\XmlDocToMaml.xsl.
             xsl.Load( typeof( Xsl.XmlDocToMaml ) );
 
-            using ( var sw = new StringWriter() )
+            try
             {
-                using ( var xw = XmlWriter.Create( sw ) )
-                    xsl.Transform( xmlDocFile, xw );
+                using ( var sw = new StringWriter() )
+                {
+                    using ( var xw = XmlWriter.Create( sw ) )
+                        xsl.Transform( xmlDocFile, xw );
 
-                using ( var sr = new StringReader( sw.ToString() ) )
-                    _xpd = new XPathDocument( sr );
-            }            
+                    using ( var sr = new StringReader( sw.ToString() ) )
+                        _xpd = new XPathDocument( sr );
+                }
+            }
+            catch ( XsltException e )
+            {
+                if ( TaskContext.Current != null )
+                {
+                    TaskContext.Current.Log.LogError(
+                        "PoshBuild",
+                        "XDS01",
+                        "",
+                        xmlDocFile,
+                        e.LineNumber,
+                        e.LinePosition,
+                        e.LineNumber,
+                        e.LinePosition,
+                        e.Message );
+                }
+                else
+                    throw;
+            }
         }
 
         bool WriteDescription( XmlWriter writer, MemberInfo member, string elementName )
@@ -133,7 +154,41 @@ namespace PoshBuild
             }
 
             return didWrite;
-       }
+        }
+
+        public override bool WriteCmdletNotes( XmlWriter writer, Type cmdlet )
+        {
+            var id = GetIdentifier( cmdlet );
+
+            var notes = _xpd.CreateNavigator().Select( string.Format( "/doc/members/member[@name='{0}']/psnote", id ) ).OfType<XPathNavigator>();
+
+            bool didWrite = false;
+
+            foreach ( var xe in notes.SelectMany( xpn => xpn.SelectChildren( XPathNodeType.Element ).OfType<XPathNavigator>() ) )
+            {
+                writer.WriteNode( xe, false );
+                didWrite = true;
+            }
+
+            return didWrite;
+        }
+
+        public override bool WriteCmdletRelatedLinks( XmlWriter writer, Type cmdlet )
+        {
+            var id = GetIdentifier( cmdlet );
+
+            var notes = _xpd.CreateNavigator().Select( string.Format( "/doc/members/member[@name='{0}']/psrelated", id ) ).OfType<XPathNavigator>();
+
+            bool didWrite = false;
+
+            foreach ( var xe in notes.SelectMany( xpn => xpn.SelectChildren( XPathNodeType.Element ).OfType<XPathNavigator>() ) )
+            {
+                writer.WriteNode( xe, false );
+                didWrite = true;
+            }
+
+            return didWrite;
+        }
 
         public override bool TryGetPropertySupportsGlobbing( PropertyInfo property, string parameterSetName, out bool supportsGlobbing )
         {

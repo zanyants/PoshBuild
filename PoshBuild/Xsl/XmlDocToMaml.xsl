@@ -9,6 +9,12 @@
   xmlns:dev="http://schemas.microsoft.com/maml/dev/2004/10"
   exclude-result-prefixes="msxsl">
   
+  <!-- XmlDocToMaml.xsl
+  
+       (c) PoshBuild Contributors
+       Released under the Microsoft Public License (Ms-PL)
+  -->
+  
   <xsl:output 
     method="xml" 
     indent="yes" />
@@ -33,15 +39,17 @@
   <!-- We're only interested in nodes within member elements. -->
   <xsl:template match="/doc/members/member">
     <xsl:copy>
-      <xsl:apply-templates select="@*"/>
+      <xsl:apply-templates select="@*"/>      
       <xsl:apply-templates select="node()" mode="member"/>
+      <!-- Copy remarks/psnote elements to this level. -->
+      <xsl:apply-templates select="remarks/psnote" mode="member"/>
     </xsl:copy>
   </xsl:template>
   
   <!-- Special case for psexample elements. -->
   <xsl:template match="example/psexample" mode="memberContent">
     <xsl:if test="not(*[1][name()='code'])">
-      <xsl:message terminate="yes">psexample elements must have a code element as the first child.</xsl:message>
+      <xsl:message terminate="yes">psexample elements must have a code element as the first child (see example element for member <xsl:value-of select="../../@name"/>)</xsl:message>
     </xsl:if>
 <command:example>
 <maml:title>
@@ -69,6 +77,37 @@
       <xsl:apply-templates select="@* | node()" mode="memberContent"/>    
     </maml:para>
   </xsl:template>
+
+  <!-- Related links -->
+  <xsl:template match="psrelated" mode="member">
+    <psrelated>
+      <maml:navigationLink>
+        <maml:linkText><xsl:value-of select="."/></maml:linkText>
+      </maml:navigationLink>
+    </psrelated>
+  </xsl:template>
+  
+  <!-- Check structure and move psnote elements from remarks section to be children of member. -->
+  <xsl:template match="remarks/psnote" mode="member">
+    <xsl:if test="count(title) > 1">
+      <xsl:message terminate="yes">psnote elements may contain at most one title element (see remarks element for member <xsl:value-of select="../../@name"/>)</xsl:message>
+    </xsl:if>
+    <xsl:if test="count(title) = 1 and count( title/preceding-sibling::* | title/preceding-sibling::text()[not( normalize-space() = '' or normalize-space() = ' ' )] ) != 0">
+      <xsl:message terminate="yes">The title element must be the first child of psnote, and may not be preceded by text (see remarks element for member <xsl:value-of select="../../@name"/>)</xsl:message>
+    </xsl:if>
+    <psnote>
+      <maml:title><xsl:value-of select="title"/></maml:title>
+      <maml:alert>
+        <xsl:apply-templates select="node()" mode="memberContent"/>
+      </maml:alert>
+    </psnote>    
+  </xsl:template>
+
+  <!-- Skip psnote/title - it's handled directly in the template above. -->
+  <xsl:template match="psnote/title" mode="memberContent" />
+
+  <!-- Remove psnote elements from remarks section. They are copied up a level. -->
+  <xsl:template match="remarks/psnote" mode="memberContent" />
   
   <!-- bullet-type list -->
   <xsl:template match="list[@type='bullet']" mode="memberContent">

@@ -48,7 +48,9 @@ namespace PoshBuild
             GenerateCommandParameters();
             GenerateCommandInputTypes();
             GenerateCommandReturnValues();
+            GenerateCommandNotes();
             GenerateCommandExamples();
+            GenerateCommandRelatedLinks();
 
             _writer.WriteEndElement(); // </command:command>
         }
@@ -224,5 +226,20 @@ namespace PoshBuild
             _docSource.WriteCmdletExamples( _writer, _type );
             _writer.WriteEndElement(); // </command:examples>
         }
+
+        void GenerateCommandNotes()
+        {
+            _writer.WriteStartElement( "maml", "alertSet", null );
+            _docSource.WriteCmdletNotes( _writer, _type );
+            _writer.WriteEndElement(); // </maml:alertSet>
+        }
+
+        void GenerateCommandRelatedLinks()
+        {
+            _writer.WriteStartElement( "maml", "relatedLinks", null );
+            _docSource.WriteCmdletRelatedLinks( _writer, _type );
+            _writer.WriteEndElement(); // </maml:alertSet>
+        }
+    
     }
 }

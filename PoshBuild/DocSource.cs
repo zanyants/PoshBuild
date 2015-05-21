@@ -44,5 +44,15 @@ namespace PoshBuild
         {
             return false;
         }
+
+        virtual public bool WriteCmdletNotes( XmlWriter writer, Type cmdlet )
+        {
+            return false;
+        }
+
+        virtual public bool WriteCmdletRelatedLinks( XmlWriter writer, Type cmdlet )
+        {
+            return false;
+        }
     }
 }

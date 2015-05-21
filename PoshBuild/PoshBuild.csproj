@@ -73,10 +73,14 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ComponentModel\SynopsisAttribute.cs" />
     <Compile Include="ReflectionDocSource.cs" />
+    <Compile Include="TaskContext.cs" />
     <Compile Include="TypeNameHelper.cs" />
     <Compile Include="XmlDocSource.cs" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="NuGet\PoshBuild.targets">
+      <SubType>Designer</SubType>
+    </None>
     <None Include="packages.config" />
     <None Include="PoshBuild.Tasks.targets">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -86,22 +90,20 @@
     <None Include="Xsl\XmlDocToMaml.xsl" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Target
-    Name="PoshBuild_CompileXsl">  
+  <Target Name="PoshBuild_CompileXsl">
     <PropertyGroup>
-      <xsltc_debug/>
+      <xsltc_debug />
       <xsltc_debug Condition=" $(Configuration) == 'Debug' ">/debug</xsltc_debug>
       <CompiledXslAssemblyName>$(AssemblyName).CompiledXsl</CompiledXslAssemblyName>
       <CompiledXslAssemblyPath>$(IntermediateOutputPath)$(CompiledXslAssemblyName).dll</CompiledXslAssemblyPath>
     </PropertyGroup>
     <MakeDir Directories="$(IntermediateOutputPath)" />
-    <Exec
-      Command='"$(TargetFrameworkSDKToolsDirectory)\xsltc.exe" "/out:$(CompiledXslAssemblyPath)" /version:1.0.0.0 $(xsltc_debug) /nologo /class:PoshBuild.Xsl.XmlDocToMaml Xsl\XmlDocToMaml.xsl' />
+    <Exec Command="&quot;$(TargetFrameworkSDKToolsDirectory)\xsltc.exe&quot; &quot;/out:$(CompiledXslAssemblyPath)&quot; /version:1.0.0.0 $(xsltc_debug) /nologo /class:PoshBuild.Xsl.XmlDocToMaml Xsl\XmlDocToMaml.xsl" />
     <ItemGroup>
       <Reference Include="$(CompiledXslAssemblyName)">
         <HintPath>$(CompiledXslAssemblyPath)</HintPath>
         <Private>true</Private>
-      </Reference>    
+      </Reference>
     </ItemGroup>
   </Target>
   <PropertyGroup>
