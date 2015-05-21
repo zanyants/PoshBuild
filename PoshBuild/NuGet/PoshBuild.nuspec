@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>PoshBuild</id>
+    <version>0.2.0-alpha-01</version>
+    <title>PoshBuild</title>
+    <authors>PoshBuild Contributors</authors>
+    <owners>Zany Ants</owners>
+    <licenseUrl>http://opensource.org/licenses/MS-PL</licenseUrl>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <copyright>Copyright 2008 - 2015 PoshBuild Contributors.</copyright>
+    <projectUrl>https://github.com/zanyants/PoshBuild</projectUrl>
+    <summary>Generates PowerShell help files and display format files as part of the build process for PowerShell snap-ins and binary modules.</summary>
+    <description>
+      Generates PowerShell help files and display format files as part of the build process for PowerShell snap-ins and binary modules. Information can be gathered from standard attributes (eg, [Cmdlet] and [Parameter]), source code XML documentation comments and sidecar descriptor assemblies.</description>
+    <tags>powershell help maml snapin module</tags>
+    <developmentDependency>true</developmentDependency>
+  </metadata>
+  <files>
+    <file src="PoshBuild.targets" target="build" />
+    <file src="..\bin\release\PoshBuild*.dll" target="tools" />
+  </files>
+</package>
