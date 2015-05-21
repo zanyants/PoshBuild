@@ -1,0 +1,83 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<Project ToolsVersion="4.0"
+         xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <!-- (c) 2015 PoshBuild Contributors. Released under the Microsoft Public License (Ms-PL)-->
+
+  <PropertyGroup>
+    <PoshBuildDll>$(MSBuildThisFileDirectory)..\tools\PoshBuild.dll</PoshBuildDll>
+  </PropertyGroup>
+
+
+  <UsingTask
+    TaskName="PoshBuild.Build.GenerateCmdletHelp"
+    AssemblyFile="$(PoshBuildDll)" />
+
+  <UsingTask
+    TaskName="PoshBuild.Build.GenerateDisplayFormat"
+    AssemblyFile="$(PoshBuildDll)" />
+
+  <Target
+    Name="PoshBuild_Init">
+
+    <ItemGroup>
+
+      <!-- Set default input assemblies, if not already defined. -->
+      <PoshBuildAssemblies
+        Condition=" '@(PoshBuildAssemblies)' == '' "
+        Include="$(TargetPath)">
+        <PoshBuildXmlDocFile>$(DocumentationFile)</PoshBuildXmlDocFile>
+      </PoshBuildAssemblies>
+
+      <!-- Set default documentation sources (in order of priority), if not already defined. -->
+      <PoshBuildDocSource
+        Condition=" '@(PoshBuildDocSource)' == '' "
+        Include="Descriptor;Reflection;XmlDoc" />
+
+      <!-- Add default per-assembly documentation sources for those with none already defined. -->
+      <PoshBuildAssemblies
+        Condition=" %(PoshBuildAssemblies.PoshBuildDocSources) == '' ">
+        <PoshBuildDocSources>@(PoshBuildDocSource->'%(Identity)')</PoshBuildDocSources>
+      </PoshBuildAssemblies>
+
+      <!-- Add default per-assembly output filename for those with none already defined. -->
+      <PoshBuildAssemblies
+        Condition=" %(PoshBuildAssemblies.PoshBuildOutputFile) == '' ">
+        <PoshBuildOutputFile>%(PoshBuildAssemblies.FullPath)-Help.xml</PoshBuildOutputFile>
+      </PoshBuildAssemblies>
+
+      <!-- There are no default descriptor assemblies. These should be added as @(PoshBuildDescriptorAssemblies) items. -->
+
+    </ItemGroup>
+
+  </Target>
+
+  <Target
+    Name="PoshBuild"
+    DependsOnTargets="PoshBuild_Init"
+    Inputs="@(PoshBuildAssemblies)"
+    Outputs="%(PoshBuildOutputFile)">
+
+    <!-- Batch per permutation of doc sources -->
+    <PoshBuild.Build.GenerateCmdletHelp
+      Assemblies="@(PoshBuildAssemblies)"
+      DocSources="%(PoshBuildAssemblies.PoshBuildDocSources)"
+      DescriptorAssemblies="@(PoshBuildDescriptorAssemblies)">
+
+      <Output
+        TaskParameter="HelpFiles"
+        ItemName="FileWrites" />
+
+    </PoshBuild.Build.GenerateCmdletHelp>
+
+  </Target>
+
+  <PropertyGroup
+    Condition=" $(DisablePoshBuild) != 'true' ">
+    <BuildDependsOn>
+      $(BuildDependsOn);
+      PoshBuild
+    </BuildDependsOn>
+  </PropertyGroup>
+
+</Project>
