@@ -38,6 +38,7 @@ namespace PoshBuild
                 { typeof( SwitchParameter ), "SwitchParameter" },
                 { typeof( System.Management.Automation.Language.NullString ), "NullString" },
                 { typeof( ScriptBlock ), "ScriptBlock" },
+                { typeof( IEnumerable ), "IEnumerable" }
             };            
         }
 
@@ -74,16 +75,16 @@ namespace PoshBuild
 
                 return sb.ToString();
             }
-            else if ( type.IsGenericType && !type.ContainsGenericParameters )
+            else if ( type.IsGenericType )
             {
-                // We only attempt to beautify closed generic types. It's unusual to encouter open generic types in PS cmdlets.
-                
-                var simpleName = type.Name.Substring(0, type.Name.IndexOf( '`') );
+                var genericDef = type.IsGenericTypeDefinition ? type : type.GetGenericTypeDefinition();
+
+                var simpleName = type.Name.Substring( 0, type.Name.IndexOf( '`' ) );
 
                 var sb = new StringBuilder();
 
-                // Skip only system namespace.
-                if ( type.Namespace != "System" )
+                // Skip namespace for IEnumerable<>, and any class in System namespace
+                if ( genericDef != typeof( IEnumerable<> ) && type.Namespace != "System" )
                 {
                     sb.Append( type.Namespace );
                     sb.Append( '.' );
@@ -96,7 +97,13 @@ namespace PoshBuild
 
                 for ( int i = 0; i < genericArgs.Length; ++i )
                 {
-                    sb.Append( GetPSPrettyName( genericArgs[i] ) );
+                    var genericArg = genericArgs[ i ];
+                    
+                    if ( genericArg.IsGenericParameter )
+                        sb.Append( genericArg.Name );
+                    else
+                        sb.Append( GetPSPrettyName( genericArg ) );
+
                     if ( i + 1 < genericArgs.Length )
                         sb.Append( ',' );
                 }
