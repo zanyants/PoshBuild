@@ -7,7 +7,8 @@
   xmlns:maml="http://schemas.microsoft.com/maml/2004/10"
   xmlns:command="http://schemas.microsoft.com/maml/dev/command/2004/10"
   xmlns:dev="http://schemas.microsoft.com/maml/dev/2004/10"
-  exclude-result-prefixes="msxsl">
+  xmlns:poshbuild="urn:poshbuild"
+  exclude-result-prefixes="msxsl poshbuild">
   
   <!-- XmlDocToMaml.xsl
   
@@ -113,7 +114,27 @@
   <!-- Remove psnote elements from remarks section. They are copied up a level. -->
   <xsl:template match="remarks/psnote" mode="memberContent" />
   
-  <!-- bullet-type list -->
+  <!-- Standard @name containing elements - replace with content of @name -->
+  <xsl:template match="paramref | typenameref" mode="memberContent">
+    <xsl:value-of select="@name"/>
+  </xsl:template>
+  
+  <!-- see - replace with prettified content of @cref -->
+  <xsl:template match="see" mode="memberContent">
+    <xsl:choose>
+      <xsl:when test="function-available('poshbuild:GetPrettyNameForIdentifier')">
+        <xsl:value-of select="poshbuild:GetPrettyNameForIdentifier( ancestor::member/@name,  @cref)"/>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:value-of select="@cref"/>
+      </xsl:otherwise>
+    </xsl:choose>
+  </xsl:template>
+
+  <!-- seealso - remove (these are normally rendered into a separate "See Also" section) -->
+  <xsl:template match="seealso" mode="memberContent" />
+
+    <!-- bullet-type list -->
   <xsl:template match="list[@type='bullet']" mode="memberContent">
     <xsl:apply-templates select="node()" mode="bulletList"/>    
   </xsl:template>
@@ -211,13 +232,6 @@
       <xsl:apply-templates select="@*" />
       <xsl:apply-templates select="node()" mode="memberContent"/>
     </xsl:copy>
-  </xsl:template>
-
-  <!-- Wrap any non-whitespace text nodes, not already inside a para or handled specially elsewhere, inside <maml:para> -->
-  <xsl:template match="text()[not(parent::para) and not( normalize-space() = '' or normalize-space() = ' ' )]" mode="memberContent">
-    <maml:para>
-      <xsl:value-of select="."/>
-    </maml:para>
   </xsl:template>
 
 </xsl:stylesheet>
