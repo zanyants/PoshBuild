@@ -283,9 +283,16 @@ namespace PoshBuild
 
         struct XmlDocIdentifier
         {
+            // Note: xmldoc identifiers don't qualify nested types in an identifiable way - namespaces, class names and nested class
+            // names are all separated with '.' characters. Such identifiers can be genuinely ambiguous, and there's not much
+            // we can do about it. At this level the concept of nested classes is ignored - we interpret symbols as
+            // Namespace.ClassName[.MemberName]
+
             public char Kind { get; private set; }
             public string Body { get; private set; }
-            public string Type { get; private set; }
+            public string TypeFullName { get; private set; }
+            public string TypeName { get; private set; }
+            public string Namespace { get; private set; }
             public string Member { get; private set; }
             public string Overload { get; private set; }
             public string OriginalString { get; private set; }
@@ -303,9 +310,12 @@ namespace PoshBuild
 
                 var kind = identifier[ 0 ];
                 var body = identifier.Substring( 2 );
-                string type = null;
+                string typeFullName = null;
                 string member = null;
                 string overload = null;
+                string ns = null;
+                string typeName = null;
+
                 bool isCtor = false;
 
                 switch ( kind )
@@ -314,7 +324,7 @@ namespace PoshBuild
                     case '!':
                         break;
                     case 'T':
-                        type = body;
+                        typeFullName = body;
                         break;
                     case 'F':
                     case 'P':
@@ -328,7 +338,12 @@ namespace PoshBuild
                             overload = body.Substring( searchPos );
 
                         int memberSepIdx = body.LastIndexOf( '.', searchPos - 1 );
-                        type = body.Substring( 0, memberSepIdx );
+
+                        if ( memberSepIdx == -1 )
+                            // Malformed.
+                            return false;
+
+                        typeFullName = body.Substring( 0, memberSepIdx );
                         member = body.Substring( memberSepIdx + 1, searchPos - memberSepIdx - 1 ).Replace( '#', '.' );
                         isCtor = kind == 'M' && ( member == ".ctor" || member == ".cctor" );
                         break;
@@ -337,7 +352,35 @@ namespace PoshBuild
                         return false;
                 }
 
-                result = new XmlDocIdentifier() { Body = body, IsCtor = isCtor, Kind = kind, Member = member, OriginalString = identifier, Overload = overload, Type = type };
+                if ( typeFullName != null )
+                {
+                    var splitTypeIdx = typeFullName.LastIndexOf( '.' );
+
+                    if ( splitTypeIdx != -1 && splitTypeIdx != typeFullName.Length - 1 )
+                    {
+                        ns = typeFullName.Substring( 0, splitTypeIdx );
+                        typeName = typeFullName.Substring( splitTypeIdx + 1 );
+                    }
+                    else
+                    {
+                        ns = string.Empty;
+                        typeName = typeFullName;
+                    }
+                }
+
+                result = new XmlDocIdentifier() 
+                { 
+                    Body = body, 
+                    IsCtor = isCtor, 
+                    Kind = kind, 
+                    Member = member, 
+                    Namespace = ns,
+                    OriginalString = identifier, 
+                    Overload = overload, 
+                    TypeFullName = typeFullName,
+                    TypeName = typeName
+                };
+
                 return true;
             }
         }
@@ -405,21 +448,18 @@ namespace PoshBuild
                     return xdiId.OriginalString;
             }
 
-            // xmldoc identifiers don't qualify nested types in an identifiable way - namespaces, class names and nested class
-            // names are all separated with '.' characters. Such identifiers can be genuinely ambiguous, and there's not much
-            // we can do about it.
-
-            // We don't want to qualify identifiers local to the current cmdlet (other than ctors)
-            string useTypeName =
-                !xdiId.IsCtor && xdiDM.Type == xdiId.Type ?
-                null :
-                GetBestPSPrettyNameForType( xdiId.Type );
-
             var sb = new StringBuilder();
 
-            if ( xdiId.IsCtor || xdiDM.Type != xdiId.Type )
+            if ( xdiId.IsCtor || xdiDM.TypeFullName != xdiId.TypeFullName )
             {
-                sb.Append( GetBestPSPrettyNameForType( xdiId.Type ) );
+                var prettyName = TypeNameHelper.GetPSPrettyName( xdiId.TypeFullName );
+                
+                // If GetPSPrettyName didn't transform the full typename, and this is a local reference, just use the type name, not the full name.
+                if ( prettyName == xdiId.TypeFullName && xdiDM.TypeFullName == xdiId.TypeFullName )
+                    prettyName = xdiId.TypeName;
+
+                sb.Append( prettyName );
+
                 if ( !xdiId.IsCtor && xdiId.Member != null )
                     sb.Append( '.' );
             }
@@ -428,35 +468,58 @@ namespace PoshBuild
                 sb.Append( xdiId.Member );
 
             if ( xdiId.Overload != null )
-                sb.Append( PrettifyMemberOverload( xdiId.Overload ) );
+                sb.Append( PrettifyMemberOverload2( xdiId.Overload ) );
+            else if ( xdiId.IsCtor )
+                sb.Append( "()" );
 
             return sb.ToString();
         }
 
-        const string _rxStrMatchOverload = @"
-  \(?
-  (?<TypeName>.+?)
-  (
-	   ((?<ByRef>@)|(?<Ptr>\*)|(?<Pinned>\^))?
-    (\[.*?\])?
-    (
-	     (
-		      \)(\~(?<ConversionTypeName>.+))?
-	     )
-	     |
-	     ,
-	   )
-  )
+        const string _rxStrMatchOverload =
+@"
+[\(~]?
+(?<TypeName>.+?)
+[\@\*\^\&]?
+( [\)\[\]\{\}\,\~]+ | $ )
 ";
 
-        static readonly Regex _rxMatchOverload = new Regex( _rxStrMatchOverload, RegexOptions.Compiled | RegexOptions.IgnorePatternWhitespace | RegexOptions.ExplicitCapture );
+        static readonly Regex _rxMatchOverload = new Regex( _rxStrMatchOverload, RegexOptions.Compiled | RegexOptions.IgnorePatternWhitespace | RegexOptions.ExplicitCapture | RegexOptions.CultureInvariant );
+
+        /// <summary>
+        /// Appends part of an overload string that's not a regex-matched type name. Certain characters are replaced with PowerShell and C# style equivalents.
+        /// </summary>
+        /// <param name="sb"></param>
+        /// <param name="part"></param>
+        static void AppendRawOverloadPart( StringBuilder sb, string part )
+        {
+            foreach ( var ch in part )
+            {
+                var ch2 = ch;
+
+                switch ( ch )
+                {
+                    case '@':
+                        // Use C#-style 'by ref' as this is more widely understood.
+                        ch2 = '&';
+                        break;
+                    case '{':
+                        // PowerShell uses square brackets for generic type args.
+                        ch2 = '[';
+                        break;
+                    case '}':
+                        // PowerShell uses square brackets for generic type args.
+                        ch2 = ']';
+                        break;
+                }
+
+                sb.Append( ch2 );
+            }
+        }
 
         /// <summary>
         /// Prettifies the portion of an xmldoc identifier in parentheses and thereafter (eg, method arguments)
         /// </summary>
-        /// <param name="overload"></param>
-        /// <returns></returns>
-        static string PrettifyMemberOverload( string overload )
+        static string PrettifyMemberOverload2( string overload )
         {
             if ( string.IsNullOrWhiteSpace( overload ) )
                 return overload;
@@ -469,38 +532,21 @@ namespace PoshBuild
 
             while ( m.Success )
             {
-                foreach ( 
-                    var g in 
+                foreach (
+                    var g in
                     m
                     .Groups
                     .OfType<Group>()
-                    .Select( ( g, idx ) => new { Group = g, Name = _rxMatchOverload.GroupNameFromNumber( idx ) } )
                     .Skip( 1 )
-                    .Where( g => g.Group.Success )
-                    .OrderBy( g => g.Group.Index ) )
+                    .Where( g => g.Success )
+                    .OrderBy( g => g.Index ) )
                 {
-                    if ( g.Group.Index > lastIndex )
-                        sb.Append( overload.Substring( lastIndex, g.Group.Index - lastIndex ) );
+                    if ( g.Index > lastIndex )
+                        AppendRawOverloadPart( sb, overload.Substring( lastIndex, g.Index - lastIndex ) );
 
-                    switch ( g.Name )
-                    {
-                        case "TypeName":
-                        case "ConversionTypeName":
-                            // TODO: Handle closed generic types, which would look like "System.Collections.Generic.IEnumerable{System.String}"
-                            sb.Append( GetBestPSPrettyNameForType( g.Group.Value ) );
-                            break;
-                        case "ByRef":
-                            sb.Append( "&" );
-                            break;
-                        case "Ptr":
-                            sb.Append( "*" );
-                            break;
-                        case "Pinned":
-                            sb.Append( "^" );
-                            break;
-                    }
+                    sb.Append( TypeNameHelper.GetPSPrettyName( g.Value ) );
 
-                    lastIndex = g.Group.Index + g.Group.Length;
+                    lastIndex = g.Index + g.Length;
                 }
 
                 if ( m.Index + m.Length == overload.Length )
@@ -510,98 +556,9 @@ namespace PoshBuild
             }
 
             if ( lastIndex < overload.Length )
-                sb.Append( overload.Substring( lastIndex ) );
+                AppendRawOverloadPart( sb, overload.Substring( lastIndex ) );
 
             return sb.ToString();
-        }
-
-        /// <summary>
-        /// Does best attempt to resolve a type and get a pretty name for it.
-        /// </summary>
-        /// <param name="typeName"></param>
-        /// <returns></returns>
-        static string GetBestPSPrettyNameForType( string typeName )
-        {
-            // TODO: Handle closed generic types, which would look like "System.Collections.Generic.IEnumerable{System.String}"
-            if ( typeName.Contains( '{') )
-            {
-                if ( TaskContext.Current != null )
-                {
-                    TaskContext.Current.Log.LogWarning(
-                        "PoshBuild",
-                        "XDS05",
-                        "",
-                        "",
-                        0, 0, 0, 0,
-                        "Type name '{0}' is a closed generic type, which is not presently supported. It will not be rendered 'pretty' in the generated PowerShell help file.",
-                        typeName );
-                }
-
-                return typeName;                
-            }
-            
-            Type type = null;
-
-            // xmldoc identifiers don't qualify nested types in an identifiable way - namespaces, class names and nested class
-            // names are all separated with '.' characters. Such identifiers can be genuinely ambiguous, and there's not much
-            // we can do about it.
-            var typeNameParts = typeName.Split( '.' );
-
-            for ( int numPartsToNest = 0; numPartsToNest < typeNameParts.Length; ++numPartsToNest )
-            {
-                var baseTypeName =
-                    string.Join(
-                        ".",
-                        typeNameParts
-                        .Take( typeNameParts.Length - numPartsToNest ) );
-
-                try
-                {
-                    var baseType = Type.GetType( baseTypeName );
-                    
-                    if ( baseType != null )
-                    {
-                        if ( numPartsToNest > 0 )
-                        {
-                            var partsToNest =
-                                typeNameParts
-                                .Skip( typeNameParts.Length - numPartsToNest );
-
-                            foreach ( var partToNest in partsToNest )
-                            {
-                                baseType = baseType.GetNestedType( partToNest, BindingFlags.Public | BindingFlags.NonPublic );
-                                if ( baseType == null )
-                                    break;
-                            }
-                        }
-
-                        type = baseType;
-                    }
-                }
-                catch { }
-
-                if ( type != null )
-                    break;
-            }
-
-            if ( type == null )
-            {
-                if ( TaskContext.Current != null )
-                {
-                    TaskContext.Current.Log.LogWarning(
-                        "PoshBuild",
-                        "XDS02",
-                        "",
-                        "",
-                        0, 0, 0, 0,
-                        "Type name '{0}' could not be resolved and will not be rendered 'pretty' in the generated PowerShell help file.",
-                        typeName );
-                }
-
-                return typeName;
-            }
-            else
-                return type.GetPSPrettyName();
         }
     }
 }
