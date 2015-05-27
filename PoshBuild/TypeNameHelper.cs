@@ -43,9 +43,65 @@ namespace PoshBuild
         }
 
         /// <summary>
+        /// Returns a pretty PowerShell-style name for a specified full name of a type (eg, <c>System.String</c>).
+        /// </summary>
+        /// <param name="typeFullName">
+        /// The full name of the type, without assembly qualification. Generic types must use the backtick form.
+        /// Only plain type names are supported - generic type parameters and arguments, element notation (arrays)
+        /// and type modifiers (pointer, out, ref, pinned) must not be specified. <see cref="IEnumerable`1"/> is
+        /// a special case and may be specified without the <c>`1</c> suffix, in which case the string <c>IEnumerable</c>
+        /// will be returned.</param>
+        /// <returns>The pretty name of the type.</returns>
+        public static string GetPSPrettyName( string typeFullName )
+        {
+            if ( string.IsNullOrWhiteSpace( typeFullName ) )
+                return typeFullName;
+
+            if ( typeFullName.IndexOfAny( "[]{},".ToCharArray() ) != -1 )
+                throw new ArgumentException( "Generic parameter and element notation is not permitted.", "typeFullName" );
+
+            if ( typeFullName.IndexOfAny( "^*&@".ToCharArray() ) != -1 )
+                throw new ArgumentException( "Type modifier notation is not permitted.", "typeFullName" );
+
+            Type type = null;
+            bool includeGenericParameters = true;
+
+            if ( typeFullName == "System.Collections.Generic.IEnumerable`1" )
+            {
+                type = typeof( IEnumerable<> );
+            }
+            else if ( typeFullName == "System.Collections.Generic.IEnumerable" )
+            {
+                type = typeof( IEnumerable<> );
+                includeGenericParameters = false;
+            }
+            else
+            {
+                // The only other types we prettify come from either mscorlib or System.Management.Automation, so try to
+                // resolve from those locations.
+                type =
+                    Type.GetType( typeFullName ) ??
+                    typeof( PSObject ).Assembly.GetType( typeFullName );
+            }
+
+            if ( type == null )
+                return typeFullName;
+            else
+                return _GetPSPrettyName( type, includeGenericParameters );
+        }
+
+        /// <summary>
         /// Returns a pretty PowerShell-style name for the current type.
         /// </summary>
         public static string GetPSPrettyName( this Type type )
+        {
+            return _GetPSPrettyName( type, true );
+        }
+
+        /// <summary>
+        /// Returns a pretty PowerShell-style name for the current type.
+        /// </summary>
+        static string _GetPSPrettyName( Type type, bool includeGenericParameters )
         {
             if ( type == null )
                 throw new ArgumentNullException( "type" );
@@ -92,22 +148,25 @@ namespace PoshBuild
 
                 sb.Append( simpleName );
 
-                sb.Append( '[' );
-                var genericArgs = type.GetGenericArguments();
-
-                for ( int i = 0; i < genericArgs.Length; ++i )
+                if ( includeGenericParameters )
                 {
-                    var genericArg = genericArgs[ i ];
-                    
-                    if ( genericArg.IsGenericParameter )
-                        sb.Append( genericArg.Name );
-                    else
-                        sb.Append( GetPSPrettyName( genericArg ) );
+                    sb.Append( '[' );
+                    var genericArgs = type.GetGenericArguments();
 
-                    if ( i + 1 < genericArgs.Length )
-                        sb.Append( ',' );
+                    for ( int i = 0; i < genericArgs.Length; ++i )
+                    {
+                        var genericArg = genericArgs[ i ];
+
+                        if ( genericArg.IsGenericParameter )
+                            sb.Append( genericArg.Name );
+                        else
+                            sb.Append( GetPSPrettyName( genericArg ) );
+
+                        if ( i + 1 < genericArgs.Length )
+                            sb.Append( ',' );
+                    }
+                    sb.Append( ']' );
                 }
-                sb.Append( ']' );
 
                 return sb.ToString();
             }
