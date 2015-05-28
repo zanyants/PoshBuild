@@ -84,10 +84,10 @@ namespace PoshBuild
                 .OrderBy( item => item.PrettyName )
                 .ToList();
 
+            _writer.WriteStartElement( "command", "inputTypes", null );
+
             if ( byType.Count > 0 )
             {
-                _writer.WriteStartElement( "command", "inputTypes", null );
-
                 foreach ( var item in byType )
                 {
                     _writer.WriteStartElement( "command", "inputType", null );
@@ -127,18 +127,40 @@ namespace PoshBuild
 
                     _writer.WriteEndElement(); // </command:inputType>
                 }
-
-                _writer.WriteEndElement(); // </command:inputTypes>
             }
+            else
+            {
+                _writer.WriteStartElement( "command", "inputType", null );
+
+                _writer.WriteStartElement( "dev", "type", null );
+
+                _writer.WriteElementString( "maml", "name", null, "None" );
+                _writer.WriteElementString( "maml", "uri", null, string.Empty );
+                _writer.WriteElementString( "maml", "description", null, string.Empty );
+
+                _writer.WriteEndElement(); // </dev:type>
+
+                // This description element *is* read by Get-Help.
+                _writer.WriteStartElement( "maml", "description", null );
+
+                _writer.WriteElementString( "maml", "para", null, "You cannot pipe objects to this cmdlet." );
+
+                _writer.WriteEndElement(); // </maml:description>
+
+                _writer.WriteEndElement(); // </command:inputType>
+            }
+
+            _writer.WriteEndElement(); // </command:inputTypes>
         }
+
         void GenerateCommandReturnValues()
         {
+            _writer.WriteStartElement( "command", "returnValues", null );
+
             var attributes = _type.GetCustomAttributes( typeof( OutputTypeAttribute ), true ).OfType<OutputTypeAttribute>().ToList();
 
             if ( attributes.Count > 0 )
             {
-                _writer.WriteStartElement( "command", "returnValues", null );
-
                 foreach ( var attr in attributes )
                 {
                     var parameterSetNames = attr.ParameterSetName == null ? null : attr.ParameterSetName.Where( s => !string.IsNullOrWhiteSpace( s ) && s != ParameterAttribute.AllParameterSets ).ToList();
@@ -180,9 +202,31 @@ namespace PoshBuild
                     }
 
                 }
-
-                _writer.WriteEndElement(); // </command:returnValues>
             }
+            else
+            {
+                _writer.WriteStartElement( "command", "returnValue", null );
+
+                _writer.WriteStartElement( "dev", "type", null );
+
+                _writer.WriteElementString( "maml", "name", null, "None" );
+                _writer.WriteElementString( "maml", "uri", null, string.Empty );
+                // This description element is *not* read by Get-Help.
+                _writer.WriteElementString( "maml", "description", null, string.Empty );
+
+                _writer.WriteEndElement(); // </dev:type>
+
+                // This description element *is* read by Get-Help.
+                _writer.WriteStartElement( "maml", "description", null );
+
+                _writer.WriteElementString( "maml", "para", null, "This cmdlet does not generate any output." );
+                
+                _writer.WriteEndElement(); // </maml:description>
+
+                _writer.WriteEndElement(); // </command:returnValue>                
+            }
+
+            _writer.WriteEndElement(); // </command:returnValues>
         }
 
         void GenerateCommandDescription()
