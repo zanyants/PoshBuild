@@ -79,7 +79,7 @@ namespace PoshBuild
 
             var byType =
                 pipeableParameters
-                .GroupBy( cpi => cpi.ParameterType )
+                .GroupBy( cpi => cpi.ParameterType.HasElementType ? cpi.ParameterType.GetElementType() : cpi.ParameterType )
                 .Select( group => new { Group = group, PrettyName = TypeNameHelper.GetPSPrettyName( group.Key ) } )
                 .OrderBy( item => item.PrettyName )
                 .ToList();
