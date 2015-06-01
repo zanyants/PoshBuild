@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Management.Automation;
 using System.Xml;
+using System.Xml.Linq;
+using System.Xml.Xsl;
 
 namespace PoshBuild
 {
@@ -10,6 +12,7 @@ namespace PoshBuild
     /// </summary>
     sealed class AssemblyProcessor
     {
+        XmlWriter _finalWriter;
         XmlWriter _writer;
         IEnumerable<Type> _types;
         IDocSource _docSource;
@@ -44,24 +47,43 @@ namespace PoshBuild
                 throw new ArgumentNullException( "docSource" );
 
             _types = types;
-            _writer = writer;
+            _finalWriter = writer;            
             _docSource = docSource;
         }
 
         public void GenerateHelpFile()
         {
-            GenerateHelpFileStart();
+            var xd = new XDocument();
 
-            foreach ( Type type in _types )
+            using ( _writer = xd.CreateWriter() )
             {
-                if ( type.IsSubclassOf( typeof( Cmdlet ) ) &&
-                    Attribute.IsDefined( type, typeof( CmdletAttribute ) ) )
+                GenerateHelpFileStart();
+
+                foreach ( Type type in _types )
                 {
-                    new CmdletTypeProcessor( _writer, type, _docSource).GenerateHelpFileEntry();
+                    if ( type.IsSubclassOf( typeof( Cmdlet ) ) &&
+                        Attribute.IsDefined( type, typeof( CmdletAttribute ) ) )
+                    {
+                        new CmdletTypeProcessor( _writer, type, _docSource ).GenerateHelpFileEntry();
+                    }
                 }
+
+                GenerateHelpFileEnd();
             }
 
-            GenerateHelpFileEnd();
+            // Apply post-processing
+            var xslPostProcess = new XslCompiledTransform(
+#if DEBUG
+                true
+#endif
+                );
+
+            // Note: The XSL transform is compiled prior to the C# build, and a reference to the compiled assembly
+            // is automatically (but transitively) added. This is done by the PoshBuild_CompileXsl target in PoshBuild.csproj.
+            // Other than at build-time, Visual Studio may indicate that Xsl.PostProcess could not be found - this
+            // "error" can normally be ignored. The uncompiled XSL transform is in Xsl\PostProcess.xsl.
+            xslPostProcess.Load( typeof( Xsl.PostProcess ) );
+            xslPostProcess.Transform( xd.CreateReader( ReaderOptions.OmitDuplicateNamespaces ), _finalWriter );
         }
 
         void GenerateHelpFileStart()
