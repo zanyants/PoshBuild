@@ -9,6 +9,10 @@
   
        (c) PoshBuild Contributors
        Released under the Microsoft Public License (Ms-PL)
+       
+       Typically called with a a compiler-generated XML documenation file (XmlDoc file) that has
+       previously been transformed by XmlDocToMaml.xsl, normalizes the whitespace of all text nodes
+       that don't have a parent element with xml:space='preserve'.
   -->
   
   <xsl:output method="xml"/>
