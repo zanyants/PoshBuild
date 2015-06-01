@@ -84,8 +84,11 @@
     <psrelated>
       <maml:navigationLink>
         <maml:linkText>
-          <xsl:value-of select="normalize-space()"/>
+          <xsl:apply-templates select="node()" mode="memberContent" />
         </maml:linkText>
+        <maml:uri>
+          <xsl:value-of select="@href"/>
+        </maml:uri>
       </maml:navigationLink>
     </psrelated>
   </xsl:template>
@@ -121,9 +124,15 @@
   
   <!-- see - replace with prettified content of @cref -->
   <xsl:template match="see" mode="memberContent">
+    <xsl:variable name="scopeRoot" select="( ancestor::*[name()='psnote' or name()='psexample'] | ancestor::*[parent::member] )[last()]"/>
+    <xsl:variable name="allPrecedingSee" select="preceding::see" />
+    <xsl:variable name="rootPrecedingSee" select="$scopeRoot/preceding::see" />
+    <!-- Compute the set difference between the $allPrecedingSee and $rootPrecedingSee nodesets: -->
+    <xsl:variable name="scopeSee" select="$allPrecedingSee[count(. | $rootPrecedingSee) != count($rootPrecedingSee)]" />
+    <xsl:variable name="scopeCref" select="$scopeSee/@cref" />
     <xsl:choose>
       <xsl:when test="function-available('poshbuild:GetPrettyNameForIdentifier')">
-        <xsl:value-of select="poshbuild:GetPrettyNameForIdentifier( ancestor::member/@name,  @cref)"/>
+        <xsl:value-of select="poshbuild:GetPrettyNameForIdentifier( ancestor::member/@name, @cref, @psstyle, $scopeCref )"/>
       </xsl:when>
       <xsl:otherwise>
         <xsl:value-of select="@cref"/>
@@ -140,11 +149,11 @@
   </xsl:template>
   
   <xsl:template match="item[term and description]" mode="bulletList">
-    <maml:para>-- <xsl:value-of select="normalize-space(term)"/>: <xsl:value-of select="normalize-space(description)"/></maml:para>
+    <maml:para>-- <xsl:apply-templates select="term/node()" mode="memberContent" />: <xsl:apply-templates select="description/node()" mode="memberContent" /></maml:para>
   </xsl:template>
 
   <xsl:template match="item[not(term and description)]" mode="bulletList">
-    <maml:para>-- <xsl:value-of select="normalize-space()"/></maml:para>
+    <maml:para>-- <xsl:apply-templates select="node()" mode="memberContent" /></maml:para>
   </xsl:template>
   
   <!-- number-type list -->
@@ -163,7 +172,7 @@
         </xsl:otherwise>
       </xsl:choose>
     </xsl:variable>
-    <maml:para><xsl:value-of select="$numberListStart + count(preceding-sibling::item)"/>: <xsl:value-of select="normalize-space(term)"/> (<xsl:value-of select="normalize-space(description)"/>)</maml:para>
+    <maml:para><xsl:value-of select="$numberListStart + count(preceding-sibling::item)"/>: <xsl:apply-templates select="term/node()" mode="memberContent" /> (<xsl:apply-templates select="description/node()" mode="memberContent" />)</maml:para>
   </xsl:template>
 
   <xsl:template match="item[not(term and description)]" mode="numberList">
@@ -177,7 +186,7 @@
         </xsl:otherwise>
       </xsl:choose>
     </xsl:variable>
-    <maml:para><xsl:value-of select="$numberListStart + count(preceding-sibling::item)"/>: <xsl:value-of select="normalize-space()"/></maml:para>
+    <maml:para><xsl:value-of select="$numberListStart + count(preceding-sibling::item)"/>: <xsl:apply-templates select="node()" mode="memberContent" /></maml:para>
   </xsl:template>
 
   <!-- definition-type list -->
@@ -186,8 +195,8 @@
   </xsl:template>
   
   <xsl:template match="item[term and description]" mode="definitionList">
-    <maml:para><xsl:value-of select="normalize-space(term)"/>:</maml:para>
-    <maml:para>-- <xsl:value-of select="normalize-space(description)"/></maml:para>
+    <maml:para><xsl:apply-templates select="term/node()" mode="memberContent" />:</maml:para>
+    <maml:para>-- <xsl:apply-templates select="description/node()" mode="memberContent" /></maml:para>
     <maml:para/>
   </xsl:template>
 
@@ -208,16 +217,16 @@
   </xsl:template>
   
   <xsl:template match="term" mode="tableListRow">
-    <xsl:if test="count(preceding-sibling::term) > 0">, </xsl:if><xsl:value-of select="normalize-space()"/>
+    <xsl:if test="count(preceding-sibling::term) > 0">, </xsl:if><xsl:apply-templates select="node()" mode="memberContent" />
   </xsl:template>
   
   <xsl:template match="description" mode="tableListRow">
-    <xsl:if test="count(preceding-sibling::description) > 0">, </xsl:if><xsl:value-of select="normalize-space()"/>
+    <xsl:if test="count(preceding-sibling::description) > 0">, </xsl:if><xsl:apply-templates select="node()" mode="memberContent" />
   </xsl:template>
 
   <!-- table row *is* of term-defintion style -->
   <xsl:template match="listheader[ count(term) = 1 and count(description) = 1 ] | item[ count(term) = 1 and count(description) = 1 ]" mode="tableList">
-    <maml:para><xsl:value-of select="normalize-space(term)"/>, <xsl:value-of select="normalize-space(description)"/></maml:para>
+    <maml:para><xsl:apply-templates select="term/node()" mode="memberContent" />, <xsl:apply-templates select="description/node()" mode="memberContent" /></maml:para>
   </xsl:template>
   
   <!-- For any other elements within member/* elements, replace with inner text (eg, <c>, <see>) -->

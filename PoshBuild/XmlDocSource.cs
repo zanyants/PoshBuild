@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Management.Automation;
@@ -19,6 +20,30 @@ namespace PoshBuild
     /// </summary>
     sealed class XmlDocSource : DocSource
     {
+        enum TypenameRenderingStyle
+        {
+            /// <summary>
+            /// Use the pretty name if there is one for the type, or the scope-contextual name. The scope-contextual name
+            /// is the namespace-qualified name (like Type.FullName) on the fist use in the current scope, or the name
+            /// without namespace qualification (like Type.Name) on subsequent uses in the current scope.
+            /// </summary>
+            PrettyOrScopeContextual = 0,
+
+            /// <summary>
+            /// Use the pretty name if there is one for the type, or the namespace-qualified name (like Type.FullName),
+            /// regardless of previous use in the current scope.
+            /// </summary>
+            Full,
+
+            /// <summary>
+            /// Use the namespace-qualified name (like Type.FullName), even if a pretty name exists, and regardless of previous
+            /// use in the current scope.
+            /// </summary>
+            ForceFull,
+
+            Default = PrettyOrScopeContextual
+        }
+
         XPathDocument _xpd;
         static readonly XmlNamespaceManager _namespaceResolver;
 
@@ -33,16 +58,31 @@ namespace PoshBuild
 
         class XslExtensions
         {
-            Func<string, string, string> _getPrettyNameForIdentifier;
+            Func<string, string, TypenameRenderingStyle, IEnumerable<string>, string> _getPrettyNameForIdentifier;
 
-            public XslExtensions( Func<string,string,string> getPrettyNameForIdentifier )
+            public XslExtensions( Func<string, string, TypenameRenderingStyle, IEnumerable<string>, string> getPrettyNameForIdentifier )
             {
                 _getPrettyNameForIdentifier = getPrettyNameForIdentifier;
             }
 
-            public string GetPrettyNameForIdentifier( string declaringMemberIdentifier, string identifier )
+            public string GetPrettyNameForIdentifier( string declaringMemberIdentifier, string identifier, string style, XPathNodeIterator precedingCrefAttributesInScope )
             {
-                return _getPrettyNameForIdentifier( declaringMemberIdentifier, identifier );
+                TypenameRenderingStyle trs = TypenameRenderingStyle.Default;
+
+                if ( !string.IsNullOrWhiteSpace( style ) && !Enum.TryParse<TypenameRenderingStyle>( style, true, out trs ) )
+                    throw new ArgumentException(
+                        string.Format(
+                            "Type rendering style '{0}' was not recognised. Valid values are {1} (case insensitive).",
+                            style,
+                            Enum.GetNames( typeof( TypenameRenderingStyle ) ).JoinWithAnd() ) );
+
+                var precedingIdentifiersInScope = 
+                    precedingCrefAttributesInScope
+                    .OfType<IXPathNavigable>()
+                    .Select( xpn => xpn.CreateNavigator().Value )
+                    .ToList();
+
+                return _getPrettyNameForIdentifier( declaringMemberIdentifier, identifier, trs, precedingIdentifiersInScope );
             }
         }
 
@@ -186,12 +226,12 @@ namespace PoshBuild
 
         public override bool WriteReturnValueDescription( XmlWriter writer, Type cmdlet, string outputTypeName )
         {
-            return WriteDescriptionEx( writer, cmdlet, string.Format( "psoutput[@type='{0}']", outputTypeName ) );
+            return WriteDescriptionEx( writer, cmdlet, string.Format( "psoutput[@cref='T:{0}']", outputTypeName ) );
         }
 
         public override bool WriteInputTypeDescription( XmlWriter writer, Type cmdlet, string inputTypeName )
         {
-            return WriteDescriptionEx( writer, cmdlet, string.Format( "psinput[@type='{0}']", inputTypeName ) );
+            return WriteDescriptionEx( writer, cmdlet, string.Format( "psinput[@cref='T:{0}']", inputTypeName ) );
         }
 
         public override bool WriteCmdletExamples( XmlWriter writer, Type cmdlet )
@@ -385,8 +425,11 @@ namespace PoshBuild
             }
         }
 
-        static string GetPSPrettyNameForIdentifier( string declaringMemberIdentifier, string identifier )
+        static string GetPSPrettyNameForIdentifier( string declaringMemberIdentifier, string identifier, TypenameRenderingStyle trs, IEnumerable<string> precedingIdentifiersInScope )
         {
+            if ( precedingIdentifiersInScope == null )
+                throw new ArgumentNullException("precedingIdentifiersInScope");
+
             if ( string.IsNullOrWhiteSpace( identifier ) )
                 return string.Empty;
 
@@ -426,6 +469,18 @@ namespace PoshBuild
                 }
             }
 
+            bool isFirstUseOfTypeInScope =
+                !
+                precedingIdentifiersInScope
+                .Select(
+                    id =>
+                    {
+                        XmlDocIdentifier xdi;
+                        XmlDocIdentifier.TryParse( id, out xdi );
+                        return xdi;
+                    } )
+                .Any( xdi => xdi.TypeFullName == xdiId.TypeFullName );
+
             switch ( xdiId.Kind )
             {
                 case 'N':
@@ -450,18 +505,30 @@ namespace PoshBuild
 
             var sb = new StringBuilder();
 
-            if ( xdiId.IsCtor || xdiDM.TypeFullName != xdiId.TypeFullName )
+            switch ( trs )
             {
-                var prettyName = TypeNameHelper.GetPSPrettyName( xdiId.TypeFullName );
-                
-                // If GetPSPrettyName didn't transform the full typename, and this is a local reference, just use the type name, not the full name.
-                if ( prettyName == xdiId.TypeFullName && xdiDM.TypeFullName == xdiId.TypeFullName )
-                    prettyName = xdiId.TypeName;
+                case TypenameRenderingStyle.PrettyOrScopeContextual:
+                case TypenameRenderingStyle.Full:
+                    if ( xdiId.IsCtor || xdiDM.TypeFullName != xdiId.TypeFullName )
+                    {
+                        var prettyName = TypeNameHelper.GetPSPrettyName( xdiId.TypeFullName );
 
-                sb.Append( prettyName );
+                        // If GetPSPrettyName didn't transform the full typename, and this is a local reference, just use the type name, not the full name.
+                        // Also don't use the full name if this is not the first reference in scope.
+                        if ( prettyName == xdiId.TypeFullName && ( xdiDM.TypeFullName == xdiId.TypeFullName || ( trs == TypenameRenderingStyle.PrettyOrScopeContextual && !isFirstUseOfTypeInScope ) ) )
+                            prettyName = xdiId.TypeName;
 
-                if ( !xdiId.IsCtor && xdiId.Member != null )
-                    sb.Append( '.' );
+                        sb.Append( prettyName );
+
+                        if ( !xdiId.IsCtor && xdiId.Member != null )
+                            sb.Append( '.' );
+                    }
+                    break;
+                case TypenameRenderingStyle.ForceFull:
+                    sb.Append( xdiId.TypeFullName );
+                    if ( !xdiId.IsCtor && xdiId.Member != null )
+                        sb.Append( '.' );
+                    break;
             }
 
             if ( !xdiId.IsCtor && xdiId.Member != null )
