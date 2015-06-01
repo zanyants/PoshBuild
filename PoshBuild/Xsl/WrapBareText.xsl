@@ -10,6 +10,9 @@
   
        (c) PoshBuild Contributors
        Released under the Microsoft Public License (Ms-PL)
+       
+       Processes a compiler-generated .xml help file (XmlDoc file) that has previously been transformed by
+       XmlDocToMaml.xsl.
   -->
   
   <xsl:output method="xml"/>
