@@ -102,6 +102,11 @@
       <SubType>Designer</SubType>
     </None>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Xsl\PostProcess.xsl">
+      <SubType>Designer</SubType>
+    </None>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="PoshBuild_CompileXsl">
     <PropertyGroup>
@@ -111,7 +116,7 @@
       <CompiledXslAssemblyPath>$(IntermediateOutputPath)$(CompiledXslAssemblyName).dll</CompiledXslAssemblyPath>
     </PropertyGroup>
     <MakeDir Directories="$(IntermediateOutputPath)" />
-    <Exec Command="&quot;$(TargetFrameworkSDKToolsDirectory)\xsltc.exe&quot; &quot;/out:$(CompiledXslAssemblyPath)&quot; /version:1.0.0.0 $(xsltc_debug) /nologo /class:PoshBuild.Xsl.XmlDocToMaml Xsl\XmlDocToMaml.xsl /class:PoshBuild.Xsl.NormalizeWhitespace Xsl\NormalizeWhitespace.xsl /class:PoshBuild.Xsl.WrapBareText Xsl\WrapBareText.xsl" />
+    <Exec Command="&quot;$(TargetFrameworkSDKToolsDirectory)\xsltc.exe&quot; &quot;/out:$(CompiledXslAssemblyPath)&quot; /version:1.0.0.0 $(xsltc_debug) /nologo /class:PoshBuild.Xsl.XmlDocToMaml Xsl\XmlDocToMaml.xsl /class:PoshBuild.Xsl.NormalizeWhitespace Xsl\NormalizeWhitespace.xsl /class:PoshBuild.Xsl.WrapBareText Xsl\WrapBareText.xsl /class:PoshBuild.Xsl.PostProcess Xsl\PostProcess.xsl" />
     <ItemGroup>
       <Reference Include="$(CompiledXslAssemblyName)">
         <HintPath>$(CompiledXslAssemblyPath)</HintPath>
