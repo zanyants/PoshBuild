@@ -115,10 +115,11 @@ namespace PoshBuild
                             .ToList();
 
                         var text = string.Format( 
-                            "You can pipe values for {0} to the {1}-{2} cmdlet.", 
+                            "You can pipe values for the {0} parameter{3} to the {1}-{2} cmdlet.", 
                             parameterNames.JoinWithAnd(), 
                             _cmdletAttribute.VerbName, 
-                            _cmdletAttribute.NounName );
+                            _cmdletAttribute.NounName,
+                            parameterNames.Count == 1 ? null : "s" );
 
                         _writer.WriteElementString( "maml", "para", null, text );
                     }
