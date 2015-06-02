@@ -24,20 +24,20 @@ namespace PoshBuild.Build
         }
 
         /// <summary>
-        /// The assemblies to reflect Cmdlets from.
+        /// The binary module or snapin assembly to reflect Cmdlets from.
         /// </summary>
-        /// <remarks>
-        /// Custom item metadata:
-        /// 
-        ///     %(PoshBuildXmlDocFile)
-        ///     The path to the compiler-generated XML documentation file. Defaults to %(FullPath) with the extension replaced with '.xml'.
-        ///     
-        ///     %(PoshBuildOutputFile)
-        ///     The path of the help file to generate. Defaults to %(FullPath)-Help.xml.
-        ///     
-        /// </remarks>
         [Required]
-        public ITaskItem[] Assemblies { get; set; }
+        public ITaskItem Assembly { get; set; }
+
+        /// <summary>
+        /// The compiler-generated XML documentation file. Defaults to %(Assembly.FullPath) with the extension replaced with '.xml'.
+        /// </summary>
+        public ITaskItem XmlDocumentationFile { get; set; }
+
+        /// <summary>
+        /// The help file to generate. Defaults to %(Assembly.FullPath)-Help.xml.
+        /// </summary>
+        public ITaskItem OutputHelpFile { get; set; }
 
         /// <summary>
         /// The sources of documentation, in order of precidence (preferred source first). The identity of each item must be Descriptor, Reflection or XmlDoc.
@@ -53,10 +53,10 @@ namespace PoshBuild.Build
         public ITaskItem[] DescriptorAssemblies { get; set; }
 
         /// <summary>
-        /// The produced help files.
+        /// The generated files, currently at most one file.
         /// </summary>
         [Output]
-        public ITaskItem[] HelpFiles { get; set; }
+        public ITaskItem[] GeneratedFiles { get; set; }
 
         /// <summary>
         /// Creates the help files out of the given assemblies.
@@ -104,7 +104,7 @@ namespace PoshBuild.Build
                                 {
                                     try
                                     {
-                                        return Assembly.LoadFrom( item.GetMetadata( "FullPath" ) );
+                                        return System.Reflection.Assembly.LoadFrom( item.GetMetadata( "FullPath" ) );
                                     }
                                     catch ( Exception e )
                                     {
@@ -126,87 +126,81 @@ namespace PoshBuild.Build
                     descriptors = DescriptorDocSource.GetDescriptors( loadedAssemblies );
                 }
 
-                var assyInfo =
-                    Assemblies
+                var assemblyPath = Assembly.GetMetadata( "FullPath" );
+                var assemblyName = Assembly.GetMetadata( "Filename" );
+
+                Assembly assembly = null;
+
+                try
+                {
+                    assembly = System.Reflection.Assembly.LoadFrom( assemblyPath );
+                }
+                catch ( Exception e )
+                {
+                    Log.LogError(
+                        "PoshBuild",
+                        "PB03",
+                        "",
+                        null,
+                        0, 0, 0, 0,
+                        "Failed to load assembly '{0}': {1}", assemblyPath, e.Message );
+
+                    return false;
+                }
+
+                var xmlDocPath = XmlDocumentationFile == null ? null : XmlDocumentationFile.GetMetadata( "FullPath" );
+                if ( string.IsNullOrEmpty( xmlDocPath ) )
+                    xmlDocPath = Path.Combine( Path.GetDirectoryName( assemblyPath ), assemblyName + ".xml" );
+
+                var helpFilePath = OutputHelpFile == null ? null : OutputHelpFile.GetMetadata( "FullPath" );
+                if ( string.IsNullOrEmpty( helpFilePath ) )
+                    helpFilePath = Path.Combine( Path.GetDirectoryName( assemblyPath ), AssemblyProcessor.GetHelpFileName( assemblyName ) );
+
+                var docSources =
+                    docSourceNames
                     .Select(
-                        item =>
+                        dsn =>
                         {
-                            var assemblyPath = item.GetMetadata( "FullPath" );
-                            var assemblyName = item.GetMetadata( "Filename" );
-
-                            Assembly assembly = null;
-
-                            try
+                            switch ( dsn )
                             {
-                                assembly = Assembly.LoadFrom( assemblyPath );
-                            }
-                            catch ( Exception e )
-                            {
-                                Log.LogError(
-                                    "PoshBuild",
-                                    "PB03",
-                                    "",
-                                    null,
-                                    0, 0, 0, 0,
-                                    "Failed to load assembly '{0}': {1}", assemblyPath, e.Message );
-
-                                return null;
-                            }
-                            
-                            var xmlDocPath = item.GetMetadata( "PoshBuildXmlDocFile" );
-                            if ( string.IsNullOrEmpty( xmlDocPath ) )
-                                xmlDocPath = Path.Combine( Path.GetDirectoryName( assemblyPath ), assemblyName + ".xml" );
-                            
-                            var helpFilePath = item.GetMetadata( "PoshBuildOutputFile" );
-                            if ( string.IsNullOrEmpty( helpFilePath ) )
-                                helpFilePath = Path.Combine( Path.GetDirectoryName( assemblyPath ), AssemblyProcessor.GetHelpFileName( assemblyName ) );
-
-                            var docSources =
-                                docSourceNames
-                                .Select(
-                                    dsn =>
+                                case DocSourceNames.Descriptor:
+                                    return ( IDocSource ) new DescriptorDocSource( descriptors );
+                                case DocSourceNames.Reflection:
+                                    return ( IDocSource ) new ReflectionDocSource();
+                                case DocSourceNames.XmlDoc:
+                                    if ( File.Exists( xmlDocPath ) )
+                                        return ( IDocSource ) new XmlDocSource( xmlDocPath );
+                                    else
                                     {
-                                        switch ( dsn )
-                                        {
-                                            case DocSourceNames.Descriptor:
-                                                return ( IDocSource ) new DescriptorDocSource( descriptors );
-                                            case DocSourceNames.Reflection:
-                                                return ( IDocSource ) new ReflectionDocSource();
-                                            case DocSourceNames.XmlDoc:
-                                                if ( File.Exists( xmlDocPath ) )
-                                                    return ( IDocSource ) new XmlDocSource( xmlDocPath );
-                                                else
-                                                {
-                                                    Log.LogWarning( "PoshBuild",
-                                                        "PB01",
-                                                        "",
-                                                        null,
-                                                        0, 0, 0, 0,
-                                                        "The compiler-generated documentation file '{0}' was not found, XmlDoc will not be used as a documentation source for assembly '{1}'.",
-                                                        xmlDocPath,
-                                                        assemblyName );
+                                        Log.LogWarning( "PoshBuild",
+                                            "PB01",
+                                            "",
+                                            null,
+                                            0, 0, 0, 0,
+                                            "The compiler-generated documentation file '{0}' was not found, XmlDoc will not be used as a documentation source for assembly '{1}'.",
+                                            xmlDocPath,
+                                            assemblyName );
 
-                                                    return null;
-                                                }
-                                            default:
-                                                throw new NotImplementedException();
-                                        }
+                                        return null;
                                     }
-                                )
-                                .Where( ds => ds != null )
-                                .ToList();
+                                default:
+                                    throw new NotImplementedException();
+                            }
+                        }
+                    )
+                    .Where( ds => ds != null )
+                    .ToList();
 
-                            return new
-                            {
-                                AssemblyPath = assemblyPath,
-                                AssemblyName = assemblyName,
-                                XmlDocPath = xmlDocPath,
-                                HelpFilePath = helpFilePath,
-                                Assembly = assembly,
-                                Types = assembly.GetExportedTypes(),
-                                DocSource = new FallthroughDocSource( docSources )
-                            };
-                        } );
+                var assyInfo = new
+                {
+                    AssemblyPath = assemblyPath,
+                    AssemblyName = assemblyName,
+                    XmlDocPath = xmlDocPath,
+                    HelpFilePath = helpFilePath,
+                    Assembly = assembly,
+                    Types = assembly.GetExportedTypes(),
+                    DocSource = new FallthroughDocSource( docSources )
+                };
 
                 if ( Log.HasLoggedErrors )
                     return false;
@@ -215,18 +209,12 @@ namespace PoshBuild.Build
                 XmlWriterSettings writerSettings = new XmlWriterSettings();
                 writerSettings.Indent = true;
 
-                foreach ( var item in assyInfo )
-                {
-                    if ( Log.HasLoggedErrors )
-                        return false;
+                using ( XmlWriter writer = XmlWriter.Create( assyInfo.HelpFilePath, writerSettings ) )
+                    new AssemblyProcessor( writer, assyInfo.Types, assyInfo.DocSource ).GenerateHelpFile();
 
-                    using ( XmlWriter writer = XmlWriter.Create( item.HelpFilePath, writerSettings ) )
-                        new AssemblyProcessor( writer, item.Types, item.DocSource ).GenerateHelpFile();
+                helpFiles.Add( new TaskItem( assyInfo.HelpFilePath ) );
 
-                    helpFiles.Add( new TaskItem( item.HelpFilePath ) );
-                }
-
-                HelpFiles = helpFiles.ToArray();
+                GeneratedFiles = helpFiles.ToArray();
 
                 return !Log.HasLoggedErrors;
             }
