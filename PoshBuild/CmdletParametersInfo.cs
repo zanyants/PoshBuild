@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Management.Automation;
-using System.Reflection;
+using Mono.Cecil;
 
 namespace PoshBuild
 {
@@ -10,17 +11,23 @@ namespace PoshBuild
         public IList<CmdletParameterInfo> Parameters { get; private set; }
         public IDictionary<string, IList<CmdletParameterInfo>> ParametersByParameterSet { get; private set; }
 
-        public CmdletParametersInfo( Type cmdletType, IDocSource docSource )
+        public CmdletParametersInfo( TypeDefinition cmdletType, IDocSource docSource )
         {
             if ( cmdletType == null )
                 throw new ArgumentNullException( "cmdletType" );
 
+            var tParameterAttribute = cmdletType.Module.Import( typeof( ParameterAttribute ) );
+
             Parameters = new List<CmdletParameterInfo>();
-            foreach ( PropertyInfo propertyInfo in cmdletType.GetProperties() )
+
+            foreach ( PropertyDefinition property in cmdletType.Properties )
             {
-                if ( Attribute.IsDefined( propertyInfo, typeof( ParameterAttribute ) ) )
+                if ( property.GetMethod.IsPublic && property.SetMethod.IsPublic )
                 {
-                    Parameters.Add( new CmdletParameterInfo( propertyInfo, docSource ) );
+                    if ( property.CustomAttributes.Any( ca => ca.AttributeType.IsSame( tParameterAttribute, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) ) )
+                    {
+                        Parameters.Add( new CmdletParameterInfo( property, docSource ) );
+                    }
                 }
             }
 

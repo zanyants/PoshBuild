@@ -1,9 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Linq;
 using System.Management.Automation;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Xsl;
+using Mono.Cecil;
 
 namespace PoshBuild
 {
@@ -14,8 +15,8 @@ namespace PoshBuild
     {
         XmlWriter _finalWriter;
         XmlWriter _writer;
-        IEnumerable<Type> _types;
         IDocSource _docSource;
+        AssemblyDefinition _assembly;
         
         #region Constants
 
@@ -35,18 +36,18 @@ namespace PoshBuild
 
         #endregion
 
-        public AssemblyProcessor( XmlWriter writer, IEnumerable<Type> types, IDocSource docSource )
+        public AssemblyProcessor( XmlWriter writer, AssemblyDefinition assembly, IDocSource docSource )
         {
             if ( writer == null )
                 throw new ArgumentNullException( "writer" );
 
-            if ( types == null )
-                throw new ArgumentNullException( "types" );
+            if ( assembly == null )
+                throw new ArgumentNullException( "assembly" );
 
             if ( docSource == null )
                 throw new ArgumentNullException( "docSource" );
 
-            _types = types;
+            _assembly = assembly;
             _finalWriter = writer;            
             _docSource = docSource;
         }
@@ -59,12 +60,21 @@ namespace PoshBuild
             {
                 GenerateHelpFileStart();
 
-                foreach ( Type type in _types )
+                foreach ( var module in _assembly.Modules )
                 {
-                    if ( type.IsSubclassOf( typeof( Cmdlet ) ) &&
-                        Attribute.IsDefined( type, typeof( CmdletAttribute ) ) )
+                    var tCmdlet = module.Import( typeof( Cmdlet ) );
+                    var tCmdletAttribute = module.Import( typeof( CmdletAttribute ) );
+
+                    if ( tCmdlet == null || tCmdletAttribute == null )
+                        // The assembly doesn't reference System.Management.Automation, nothing to do.
+                        continue;
+
+                    foreach ( var type in module.Types.Where( t => t.IsPublic && !t.IsValueType && !t.IsAbstract ) )
                     {
-                        new CmdletTypeProcessor( _writer, type, _docSource ).GenerateHelpFileEntry();
+                        if ( type.CustomAttributes.Any( ca => ca.AttributeType.IsSame( tCmdletAttribute, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) ) && type.IsSubclassOf( tCmdlet, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) )
+                        {
+                            new CmdletTypeProcessor( _writer, type, _docSource ).GenerateHelpFileEntry();
+                        }
                     }
                 }
 

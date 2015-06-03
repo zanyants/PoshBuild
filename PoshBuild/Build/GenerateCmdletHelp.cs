@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Xml;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
+using Mono.Cecil;
 using PoshBuild.ComponentModel;
 
 namespace PoshBuild.Build
@@ -93,7 +94,8 @@ namespace PoshBuild.Build
                     return false;
                 }
 
-                IDictionary<Type, ICmdletHelpDescriptor> descriptors = null;
+#if PB_ENABLE_DESCRIPTORS                
+                IDictionary<TypeDefinition, ICmdletHelpDescriptor> descriptors = null;
 
                 if ( DescriptorAssemblies != null && docSourceNames.Contains( DocSourceNames.Descriptor ) )
                 {
@@ -125,15 +127,16 @@ namespace PoshBuild.Build
 
                     descriptors = DescriptorDocSource.GetDescriptors( loadedAssemblies );
                 }
+#endif
 
                 var assemblyPath = Assembly.GetMetadata( "FullPath" );
                 var assemblyName = Assembly.GetMetadata( "Filename" );
 
-                Assembly assembly = null;
+                AssemblyDefinition assembly = null;
 
                 try
                 {
-                    assembly = System.Reflection.Assembly.LoadFrom( assemblyPath );
+                    assembly = AssemblyDefinition.ReadAssembly( assemblyPath );
                 }
                 catch ( Exception e )
                 {
@@ -164,12 +167,16 @@ namespace PoshBuild.Build
                             switch ( dsn )
                             {
                                 case DocSourceNames.Descriptor:
+#if PB_ENABLE_DESCRIPTORS
                                     return ( IDocSource ) new DescriptorDocSource( descriptors );
+#else
+                                    return null;
+#endif
                                 case DocSourceNames.Reflection:
                                     return ( IDocSource ) new ReflectionDocSource();
                                 case DocSourceNames.XmlDoc:
                                     if ( File.Exists( xmlDocPath ) )
-                                        return ( IDocSource ) new XmlDocSource( xmlDocPath );
+                                        return ( IDocSource ) new XmlDocSource( xmlDocPath, assembly.MainModule );
                                     else
                                     {
                                         Log.LogWarning( "PoshBuild",
@@ -191,30 +198,16 @@ namespace PoshBuild.Build
                     .Where( ds => ds != null )
                     .ToList();
 
-                var assyInfo = new
-                {
-                    AssemblyPath = assemblyPath,
-                    AssemblyName = assemblyName,
-                    XmlDocPath = xmlDocPath,
-                    HelpFilePath = helpFilePath,
-                    Assembly = assembly,
-                    Types = assembly.GetExportedTypes(),
-                    DocSource = new FallthroughDocSource( docSources )
-                };
-
                 if ( Log.HasLoggedErrors )
                     return false;
 
-                var helpFiles = new List<ITaskItem>();
                 XmlWriterSettings writerSettings = new XmlWriterSettings();
                 writerSettings.Indent = true;
 
-                using ( XmlWriter writer = XmlWriter.Create( assyInfo.HelpFilePath, writerSettings ) )
-                    new AssemblyProcessor( writer, assyInfo.Types, assyInfo.DocSource ).GenerateHelpFile();
+                using ( XmlWriter writer = XmlWriter.Create( helpFilePath, writerSettings ) )
+                    new AssemblyProcessor( writer, assembly, new FallthroughDocSource( docSources ) ).GenerateHelpFile();
 
-                helpFiles.Add( new TaskItem( assyInfo.HelpFilePath ) );
-
-                GeneratedFiles = helpFiles.ToArray();
+                GeneratedFiles = new ITaskItem[] { new TaskItem( helpFilePath ) };
 
                 return !Log.HasLoggedErrors;
             }

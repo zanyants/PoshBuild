@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Management.Automation;
 using System.Xml;
+using Mono.Cecil;
 
 namespace PoshBuild
 {
@@ -11,23 +12,29 @@ namespace PoshBuild
     sealed class CmdletTypeProcessor
     {
         XmlWriter _writer;
-        Type _type;
+        TypeDefinition _type;
         IDocSource _docSource;
         CmdletAttribute _cmdletAttribute;
         CmdletParametersInfo _parametersInfo;
 
-        public CmdletTypeProcessor( XmlWriter writer, Type type, IDocSource docSource )
+        public CmdletTypeProcessor( XmlWriter writer, TypeDefinition type, IDocSource docSource )
         {
             if ( type == null )
                 throw new ArgumentNullException( "type" );
 
-            if ( !type.IsSubclassOf( typeof( Cmdlet ) ) )
+            var module = type.Module;
+            var tCmdlet = module.Import( typeof( Cmdlet ) ).Resolve();
+            var tCmdletAttribute = module.Import( typeof( CmdletAttribute ) );            
+
+            if ( !type.IsSubclassOf( tCmdlet ) )
                 throw new ArgumentException( "The specified Cmdlet type does not inherit from Cmdlet.", "type" );
 
-            _cmdletAttribute = ( CmdletAttribute ) Attribute.GetCustomAttribute( type, typeof( CmdletAttribute ) );
+            var attr = type.CustomAttributes.FirstOrDefault( ca => ca.AttributeType.IsSame( tCmdletAttribute, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) );
 
-            if ( _cmdletAttribute == null )
+            if ( attr == null )
                 throw new ArgumentException( "The specified Cmdlet type does not have the CmdletAttribute attribute." );
+
+            _cmdletAttribute = attr.ConstructRealAttributeOfType<CmdletAttribute>();
 
             if ( docSource == null )
                 throw new ArgumentNullException( "docSource" );
@@ -79,7 +86,7 @@ namespace PoshBuild
 
             var byType =
                 pipeableParameters
-                .GroupBy( cpi => cpi.ParameterType.HasElementType ? cpi.ParameterType.GetElementType() : cpi.ParameterType )
+                .GroupBy( cpi => cpi.ParameterType.GetElementType() )
                 .Select( group => new { Group = group, PrettyName = TypeNameHelper.GetPSPrettyName( group.Key ) } )
                 .OrderBy( item => item.PrettyName )
                 .ToList();
@@ -156,9 +163,44 @@ namespace PoshBuild
 
         void GenerateCommandReturnValues()
         {
+            var tOutputTypeAttribute = _type.Module.Import( typeof(OutputTypeAttribute));
+
             _writer.WriteStartElement( "command", "returnValues", null );
 
-            var attributes = _type.GetCustomAttributes( typeof( OutputTypeAttribute ), true ).OfType<OutputTypeAttribute>().ToList();
+            var attributes =
+                _type
+                .CustomAttributes
+                .Where( ca => ca.AttributeType.IsSame( tOutputTypeAttribute, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) )
+                .Select(
+                    ca =>
+                    new
+                    {
+                        ParameterSetName = 
+                            ca
+                            .Properties
+                            .Where( ca2 => ca2.Name == "ParameterSetName" )
+                            .Select( ca2 => ( (CustomAttributeArgument[])ca2.Argument.Value ).Select( ca3 => (string)ca3.Value ).ToList() )
+                            .FirstOrDefault(),
+
+                        ProviderCmdlet = 
+                            ca
+                            .Properties
+                            .Where( ca2 => ca2.Name == "ProviderCmdlet" )
+                            .Select( ca2 => ( string ) ca2.Argument.Value )
+                            .FirstOrDefault(),
+
+                        Type =
+                            ( ( CustomAttributeArgument[] ) ca.ConstructorArguments[ 0 ].Value )
+                            .Select(
+                                ca2 =>
+                                {
+                                    if ( ca2.Type.Name == "String" )
+                                        return new { Type = ( TypeReference ) null, Name = ( string ) ca2.Value };
+                                    else
+                                        return new { Type = ( TypeReference ) ca2.Value, Name = ( string ) null };
+                                } ).ToList()
+                    } )
+                .ToList();
 
             if ( attributes.Count > 0 )
             {

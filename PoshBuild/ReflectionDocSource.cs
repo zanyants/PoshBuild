@@ -1,11 +1,10 @@
-﻿using System;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Linq;
 using System.Management.Automation;
-using System.Reflection;
 using System.Xml;
-using PoshBuild.ComponentModel;
+using Mono.Cecil;
 using MoreLinq;
+using PoshBuild.ComponentModel;
 
 namespace PoshBuild
 {
@@ -14,19 +13,23 @@ namespace PoshBuild
     /// </summary>
     sealed class ReflectionDocSource : AttributeBasedDocSource
     {
-        override protected SynopsisAttribute GetSynposisAttribute( Type cmdlet )
+        override protected SynopsisAttribute GetSynposisAttribute( TypeDefinition cmdlet )
         {
-            return ( SynopsisAttribute ) Attribute.GetCustomAttribute( cmdlet, typeof( SynopsisAttribute ) );
+            var tSynopsisAttribute = cmdlet.Module.Import( typeof( SynopsisAttribute ) );
+            var attr = cmdlet.CustomAttributes.FirstOrDefault( ca => ca.AttributeType.FullName == tSynopsisAttribute.FullName );
+            return attr == null ? null : attr.ConstructRealAttributeOfType<SynopsisAttribute>();
         }
 
-        override protected DescriptionAttribute GetDescriptionAttribute( Type cmdlet )
+        override protected DescriptionAttribute GetDescriptionAttribute( TypeDefinition cmdlet )
         {
-            return ( DescriptionAttribute ) Attribute.GetCustomAttribute( cmdlet, typeof( DescriptionAttribute ) );
+            var tDescriptionAttribute = cmdlet.Module.Import( typeof( DescriptionAttribute ) );
+            var attr = cmdlet.CustomAttributes.FirstOrDefault( ca => ca.AttributeType.FullName == tDescriptionAttribute.FullName );
+            return attr == null ? null : attr.ConstructRealAttributeOfType<DescriptionAttribute>();
         }
 
-        protected override GlobbingAttribute GetGlobbingAttribute( PropertyInfo property, string parameterSetName )
+        protected override GlobbingAttribute GetGlobbingAttribute( PropertyDefinition property, string parameterSetName )
         {
-            var attrs = property.GetCustomAttributes( typeof( GlobbingAttribute ), true ).OfType<GlobbingAttribute>().ToList();
+            var attrs = property.GetRealCustomAttributesOfType<GlobbingAttribute>().ToList();
             
             if ( attrs.Count == 0 )
                 return null;
@@ -34,9 +37,9 @@ namespace PoshBuild
             return attrs.First( a => a.ParameterSetName == parameterSetName ) ?? attrs.First( a => a.ParameterSetName == ParameterAttribute.AllParameterSets );
         }
 
-        public override bool WriteParameterDescription( XmlWriter writer, PropertyInfo property, string parameterSetName )
+        public override bool WriteParameterDescription( XmlWriter writer, PropertyDefinition property, string parameterSetName )
         {
-            var attrs = property.GetCustomAttributes( typeof( ParameterAttribute ), true ).OfType<ParameterAttribute>().ToList();
+            var attrs = property.GetRealCustomAttributesOfType<ParameterAttribute>().ToList();
 
             if ( attrs.Count == 0 )
                 return false;

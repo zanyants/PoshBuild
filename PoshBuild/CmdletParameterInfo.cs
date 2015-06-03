@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Management.Automation;
-using System.Reflection;
+using Mono.Cecil;
 
 namespace PoshBuild
 {
@@ -12,9 +12,9 @@ namespace PoshBuild
         public const int NonSpecificParameterSetIndex = -1;
 
         IDocSource _docSource;
-        public PropertyInfo PropertyInfo { get; private set; }
+        public PropertyDefinition PropertyDefinition { get; private set; }
         public string ParameterName { get; private set; }
-        public Type ParameterType { get; private set; }
+        public TypeDefinition ParameterType { get; private set; }
         public IList<ParameterAttribute> ParameterAttributes { get; private set; }
         public DefaultValueAttribute DefaultValueAttribute { get; private set; }
         public AliasAttribute AliasAttribute { get; private set; }
@@ -22,27 +22,27 @@ namespace PoshBuild
         public int ParameterSetCount { get { return ParameterAttributes.Count; } }
         public object DefaultValue { get { return DefaultValueAttribute != null ? DefaultValueAttribute.Value : string.Empty; } }
 
-        public CmdletParameterInfo( PropertyInfo propertyInfo, IDocSource docSource)
+        public CmdletParameterInfo( PropertyDefinition property, IDocSource docSource)
         {
             if ( docSource == null )
                 throw new ArgumentNullException( "docSource" );
 
-            if ( propertyInfo == null )
+            if ( property == null )
                 throw new ArgumentNullException( "propertyInfo" );
 
             _docSource = docSource;
             
-            PropertyInfo = propertyInfo;
-            ParameterName = propertyInfo.Name;
-            ParameterType = propertyInfo.PropertyType;
+            PropertyDefinition = property;
+            ParameterName = property.Name;
+            ParameterType = property.PropertyType.Resolve();
 
-            ParameterAttributes = Attribute.GetCustomAttributes( propertyInfo, typeof( ParameterAttribute ) ).OfType<ParameterAttribute>().ToList();
+            ParameterAttributes = property.GetRealCustomAttributesOfType<ParameterAttribute>( CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ).ToList();
             
             if ( ParameterAttributes.Count == 0 )
                 throw new ArgumentException( "The specified property doesn't have a ParameterAttribute attribute." );
 
-            DefaultValueAttribute = ( DefaultValueAttribute ) Attribute.GetCustomAttribute( propertyInfo, typeof( DefaultValueAttribute ) );
-            AliasAttribute = ( AliasAttribute ) Attribute.GetCustomAttribute( propertyInfo, typeof( AliasAttribute ) );
+            DefaultValueAttribute = property.GetRealCustomAttributesOfType<DefaultValueAttribute>( CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ).FirstOrDefault();
+            AliasAttribute = property.GetRealCustomAttributesOfType<AliasAttribute>( CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ).FirstOrDefault();
         }
 
         public int GetParameterSetIndex( string parameterSetName )
@@ -72,7 +72,7 @@ namespace PoshBuild
                 return Enumerable.Range( 0, ParameterAttributes.Count ).Any( i => Globbing( i ) );
 
             bool supportsGlobbing = false;
-            if ( _docSource.TryGetPropertySupportsGlobbing( PropertyInfo, ParameterAttributes[ parameterSetIndex ].ParameterSetName, out supportsGlobbing ) )
+            if ( _docSource.TryGetPropertySupportsGlobbing( PropertyDefinition, ParameterAttributes[ parameterSetIndex ].ParameterSetName, out supportsGlobbing ) )
                 return supportsGlobbing;
             else
                 return false;

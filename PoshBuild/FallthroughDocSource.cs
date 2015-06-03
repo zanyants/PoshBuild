@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Xml;
+using Mono.Cecil;
 
 namespace PoshBuild
 {
@@ -24,7 +24,7 @@ namespace PoshBuild
             _sources = sources;
         }
 
-        public bool WriteCmdletSynopsis( XmlWriter writer, Type cmdlet )
+        public bool WriteCmdletSynopsis( XmlWriter writer, TypeDefinition cmdlet )
         {
             foreach ( var source in _sources )
             {
@@ -34,7 +34,7 @@ namespace PoshBuild
             return false;
         }
 
-        public bool WriteCmdletDescription( XmlWriter writer, Type cmdlet )
+        public bool WriteCmdletDescription( XmlWriter writer, TypeDefinition cmdlet )
         {
             foreach ( var source in _sources )
             {
@@ -44,7 +44,7 @@ namespace PoshBuild
             return false;
         }
 
-        public bool TryGetPropertySupportsGlobbing( PropertyInfo property, string parameterSetName, out bool supportsGlobbing )
+        public bool TryGetPropertySupportsGlobbing( PropertyDefinition property, string parameterSetName, out bool supportsGlobbing )
         {
             supportsGlobbing = default( bool );
 
@@ -57,7 +57,7 @@ namespace PoshBuild
             return false;
         }
 
-        public bool WriteParameterDescription( XmlWriter writer, PropertyInfo property, string parameterSetName )
+        public bool WriteParameterDescription( XmlWriter writer, PropertyDefinition property, string parameterSetName )
         {
             foreach ( var source in _sources )
             {
@@ -67,7 +67,7 @@ namespace PoshBuild
             return false;
         }
 
-        public bool WriteReturnValueDescription( XmlWriter writer, Type cmdlet, string outputTypeName )
+        public bool WriteReturnValueDescription( XmlWriter writer, TypeDefinition cmdlet, string outputTypeName )
         {
             foreach ( var source in _sources )
             {
@@ -77,7 +77,7 @@ namespace PoshBuild
             return false;
         }
 
-        public bool WriteCmdletExamples( XmlWriter writer, Type cmdlet )
+        public bool WriteCmdletExamples( XmlWriter writer, TypeDefinition cmdlet )
         {
             foreach ( var source in _sources )
             {
@@ -88,7 +88,7 @@ namespace PoshBuild
         }
 
 
-        public bool WriteInputTypeDescription( XmlWriter writer, Type cmdlet, string inputTypeName )
+        public bool WriteInputTypeDescription( XmlWriter writer, TypeDefinition cmdlet, string inputTypeName )
         {
             foreach ( var source in _sources )
             {
@@ -98,7 +98,7 @@ namespace PoshBuild
             return false;
         }
 
-        public bool WriteCmdletNotes( XmlWriter writer, Type cmdlet )
+        public bool WriteCmdletNotes( XmlWriter writer, TypeDefinition cmdlet )
         {
             foreach ( var source in _sources )
             {
@@ -108,7 +108,7 @@ namespace PoshBuild
             return false;
         }
 
-        public bool WriteCmdletRelatedLinks( XmlWriter writer, Type cmdlet )
+        public bool WriteCmdletRelatedLinks( XmlWriter writer, TypeDefinition cmdlet )
         {
             foreach ( var source in _sources )
             {

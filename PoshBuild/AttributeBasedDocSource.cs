@@ -1,7 +1,6 @@
-﻿using System;
-using System.ComponentModel;
-using System.Reflection;
+﻿using System.ComponentModel;
 using System.Xml;
+using Mono.Cecil;
 using PoshBuild.ComponentModel;
 
 namespace PoshBuild
@@ -11,11 +10,11 @@ namespace PoshBuild
     /// </summary>
     abstract class AttributeBasedDocSource : DocSource
     {
-        abstract protected SynopsisAttribute GetSynposisAttribute( Type cmdlet );
-        abstract protected DescriptionAttribute GetDescriptionAttribute( Type cmdlet );
-        abstract protected GlobbingAttribute GetGlobbingAttribute( PropertyInfo property, string parameterSetName );
+        abstract protected SynopsisAttribute GetSynposisAttribute( TypeDefinition cmdlet );
+        abstract protected DescriptionAttribute GetDescriptionAttribute( TypeDefinition cmdlet );
+        abstract protected GlobbingAttribute GetGlobbingAttribute( PropertyDefinition property, string parameterSetName );
 
-        override public bool WriteCmdletSynopsis( XmlWriter writer, Type cmdlet )
+        override public bool WriteCmdletSynopsis( XmlWriter writer, TypeDefinition cmdlet )
         {
             var synopsisAttribute = GetSynposisAttribute( cmdlet );
 
@@ -28,7 +27,7 @@ namespace PoshBuild
             return false;
         }
 
-        override public bool WriteCmdletDescription( XmlWriter writer, Type cmdlet )
+        override public bool WriteCmdletDescription( XmlWriter writer, TypeDefinition cmdlet )
         {
             var descriptionAttribute = GetDescriptionAttribute( cmdlet );
 
@@ -41,7 +40,7 @@ namespace PoshBuild
             return false;
         }
 
-        public override bool TryGetPropertySupportsGlobbing( PropertyInfo property, string parameterSetName, out bool supportsGlobbing )
+        public override bool TryGetPropertySupportsGlobbing( PropertyDefinition property, string parameterSetName, out bool supportsGlobbing )
         {
             supportsGlobbing = default( bool );
 

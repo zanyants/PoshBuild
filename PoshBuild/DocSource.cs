@@ -1,6 +1,5 @@
-﻿using System;
-using System.Reflection;
-using System.Xml;
+﻿using System.Xml;
+using Mono.Cecil;
 
 namespace PoshBuild
 {
@@ -9,48 +8,48 @@ namespace PoshBuild
     /// </summary>
     abstract class DocSource : IDocSource
     {
-        virtual public bool WriteCmdletSynopsis( XmlWriter writer, Type cmdlet )
+        virtual public bool WriteCmdletSynopsis( XmlWriter writer, TypeDefinition cmdlet )
         {
             return false;
         }
 
-        virtual public bool WriteCmdletDescription( XmlWriter writer, Type cmdlet )
+        virtual public bool WriteCmdletDescription( XmlWriter writer, TypeDefinition cmdlet )
         {
             return false;
         }
 
-        virtual public bool TryGetPropertySupportsGlobbing( PropertyInfo property, string parameterSetName, out bool supportsGlobbing )
+        virtual public bool TryGetPropertySupportsGlobbing( PropertyDefinition property, string parameterSetName, out bool supportsGlobbing )
         {
             supportsGlobbing = default( bool );
             return false;
         }
 
-        virtual public bool WriteParameterDescription( XmlWriter writer, PropertyInfo property, string parameterSetName )
+        virtual public bool WriteParameterDescription( XmlWriter writer, PropertyDefinition property, string parameterSetName )
         {
             return false;
         }
 
-        virtual public bool WriteReturnValueDescription( XmlWriter writer, Type cmdlet, string outputTypeName )
+        virtual public bool WriteReturnValueDescription( XmlWriter writer, TypeDefinition cmdlet, string outputTypeName )
         {
             return false;
         }
 
-        virtual public bool WriteCmdletExamples( XmlWriter writer, Type cmdlet )
+        virtual public bool WriteCmdletExamples( XmlWriter writer, TypeDefinition cmdlet )
         {
             return false;
         }
 
-        virtual public bool WriteInputTypeDescription( XmlWriter writer, Type cmdlet, string inputTypeName )
+        virtual public bool WriteInputTypeDescription( XmlWriter writer, TypeDefinition cmdlet, string inputTypeName )
         {
             return false;
         }
 
-        virtual public bool WriteCmdletNotes( XmlWriter writer, Type cmdlet )
+        virtual public bool WriteCmdletNotes( XmlWriter writer, TypeDefinition cmdlet )
         {
             return false;
         }
 
-        virtual public bool WriteCmdletRelatedLinks( XmlWriter writer, Type cmdlet )
+        virtual public bool WriteCmdletRelatedLinks( XmlWriter writer, TypeDefinition cmdlet )
         {
             return false;
         }

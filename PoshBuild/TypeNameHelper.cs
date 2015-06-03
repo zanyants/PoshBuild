@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Management.Automation;
 using System.Text;
 using System.Text.RegularExpressions;
+using Mono.Cecil;
 
 namespace PoshBuild
 {
@@ -13,6 +15,7 @@ namespace PoshBuild
     static class TypeNameHelper
     {
         static readonly Dictionary<Type, string> _map;
+        static readonly Dictionary<string, string> _mapByFullName;
 
         static TypeNameHelper()
         {
@@ -39,7 +42,9 @@ namespace PoshBuild
                 { typeof( System.Management.Automation.Language.NullString ), "NullString" },
                 { typeof( ScriptBlock ), "ScriptBlock" },
                 { typeof( IEnumerable ), "IEnumerable" }
-            };            
+            };
+
+            _mapByFullName = _map.ToDictionary( kvp => kvp.Key.FullName, kvp => kvp.Value );
         }
 
         /// <summary>
@@ -52,7 +57,7 @@ namespace PoshBuild
         /// a special case and may be specified without the <c>`1</c> suffix, in which case the string <c>IEnumerable</c>
         /// will be returned.</param>
         /// <returns>The pretty name of the type.</returns>
-        public static string GetPSPrettyName( string typeFullName )
+        public static string GetPSPrettyName( string typeFullName, ModuleDefinition contextModule )
         {
             if ( string.IsNullOrWhiteSpace( typeFullName ) )
                 return typeFullName;
@@ -87,13 +92,13 @@ namespace PoshBuild
             if ( type == null )
                 return typeFullName;
             else
-                return _GetPSPrettyName( type, includeGenericParameters );
+                return _GetPSPrettyName( contextModule.Import( type ), includeGenericParameters );
         }
 
         /// <summary>
         /// Returns a pretty PowerShell-style name for the current type.
         /// </summary>
-        public static string GetPSPrettyName( this Type type )
+        public static string GetPSPrettyName( this TypeReference type )
         {
             return _GetPSPrettyName( type, true );
         }
@@ -101,18 +106,23 @@ namespace PoshBuild
         /// <summary>
         /// Returns a pretty PowerShell-style name for the current type.
         /// </summary>
-        static string _GetPSPrettyName( Type type, bool includeGenericParameters )
+        static string _GetPSPrettyName( TypeReference typeRef, bool includeGenericParameters )
         {
-            if ( type == null )
-                throw new ArgumentNullException( "type" );
+            if ( typeRef == null )
+                throw new ArgumentNullException( "typeRef" );
 
-            if ( type.HasElementType )
+            var type = typeRef.Resolve();
+
+            var sb = new StringBuilder();
+
+            if ( typeRef.IsArray || typeRef.IsByReference || typeRef.IsPinned || typeRef.IsPointer )
             {
-                var sb = new StringBuilder( GetPSPrettyName( type.GetElementType() ) );
+                sb.Append( _GetPSPrettyName( typeRef.GetElementType(), true ) );
 
-                if ( type.IsArray )
+                if ( typeRef.IsArray )
                 {
-                    var count = type.GetArrayRank() - 1 ;
+                    var array = ( ArrayType ) typeRef;
+                    var count = array.Rank - 1;
                     if ( count > 0 )
                     {
                         sb.Append( '[' );
@@ -123,75 +133,79 @@ namespace PoshBuild
                         sb.Append( "[]" );
                 }
 
-                if ( type.IsByRef )
+                if ( typeRef.IsByReference )
                     sb.Append( '&' );
 
-                if ( type.IsPointer )
+                if ( typeRef.IsPointer )
                     sb.Append( '*' );
 
-                return sb.ToString();
-            }
-            else if ( type.IsGenericType )
-            {
-                var genericDef = type.IsGenericTypeDefinition ? type : type.GetGenericTypeDefinition();
-
-                var simpleName = type.Name.Substring( 0, type.Name.IndexOf( '`' ) );
-
-                var sb = new StringBuilder();
-
-                // Skip namespace for IEnumerable<>, and any class in System namespace
-                if ( genericDef != typeof( IEnumerable<> ) && type.Namespace != "System" )
-                {
-                    sb.Append( type.Namespace );
-                    sb.Append( '.' );
-                }
-
-                sb.Append( simpleName );
-
-                if ( includeGenericParameters )
-                {
-                    sb.Append( '[' );
-                    var genericArgs = type.GetGenericArguments();
-
-                    for ( int i = 0; i < genericArgs.Length; ++i )
-                    {
-                        var genericArg = genericArgs[ i ];
-
-                        if ( genericArg.IsGenericParameter )
-                            sb.Append( genericArg.Name );
-                        else
-                            sb.Append( GetPSPrettyName( genericArg ) );
-
-                        if ( i + 1 < genericArgs.Length )
-                            sb.Append( ',' );
-                    }
-                    sb.Append( ']' );
-                }
-
-                return sb.ToString();
+                if ( typeRef.IsPinned )
+                    sb.Append( '^' );
             }
             else
             {
-                string name;
+                if ( typeRef.IsGenericInstance || typeRef.HasGenericParameters )
+                {
+                    var genericInstance = typeRef.IsGenericInstance ? ( GenericInstanceType ) typeRef : null;
 
-                if ( _map.TryGetValue( type, out name ) )
-                    return name;
+                    var tIEnumerable1 = typeRef.Module.Import( typeof( IEnumerable<> ) );
 
-                name = type.Name;
+                    var simpleName = type.Name.Substring( 0, type.Name.IndexOf( '`' ) );
 
-                if ( type.IsSubclassOf( typeof( Attribute ) ) && name.EndsWith( "Attribute" ) && name.Length > 9 )
-                    name = name.Substring( 0, name.Length - 9 );
+                    // Skip namespace for IEnumerable<>, and any class in System namespace
+                    if ( !type.IsSame( tIEnumerable1, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) && type.Namespace != "System" )
+                    {
+                        sb.Append( type.Namespace );
+                        sb.Append( '.' );
+                    }
 
-                // System::* => type.Name
-                if ( type.Namespace == "System" )
-                    return name;
+                    sb.Append( simpleName );
 
-                // System.Management.Automation::PS* => type.Name
-                if ( type.Namespace == "System.Management.Automation" && type.Name.StartsWith( "PS" ) )
-                    return name;
+                    if ( includeGenericParameters )
+                    {
+                        sb.Append( '[' );
 
-                return type.FullName;
+                        if ( typeRef.IsGenericInstance )
+                        {
+                            sb.Append( string.Join( ",", genericInstance.GenericArguments.Select( ga => GetPSPrettyName( ga ) ) ) );
+                        }
+                        else
+                        {
+                            sb.Append( string.Join( ",", typeRef.GenericParameters.Select( gp => gp.Name ) ) );
+                        }
+
+                        sb.Append( ']' );
+                    }
+                }
+                else
+                {
+                    string name;
+
+                    if ( _mapByFullName.TryGetValue( typeRef.FullName, out name ) )
+                        sb.Append( name );
+                    else
+                    {
+                        name = type.Name;
+
+                        if ( type.IsSubclassOf( type.Module.Import( typeof( Attribute ) ), CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) && name.EndsWith( "Attribute" ) && name.Length > 9 )
+                            name = name.Substring( 0, name.Length - 9 );
+
+                        // System::* => type.Name
+                        if ( type.Namespace == "System" )
+                            sb.Append( name );
+                        else
+                        {
+                            // System.Management.Automation::PS* => type.Name
+                            if ( type.Namespace == "System.Management.Automation" && type.Name.StartsWith( "PS" ) )
+                                sb.Append( name );
+                            else
+                                sb.Append( type.FullName );
+                        }
+                    }
+                }
             }
+
+            return sb.ToString();
         }
     }
 }

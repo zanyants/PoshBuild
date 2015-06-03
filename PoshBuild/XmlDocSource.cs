@@ -2,13 +2,12 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Management.Automation;
-using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.XPath;
 using System.Xml.Xsl;
+using Mono.Cecil;
 
 namespace PoshBuild
 {
@@ -86,10 +85,13 @@ namespace PoshBuild
             }
         }
 
-        public XmlDocSource( string xmlDocFile )
+        public XmlDocSource( string xmlDocFile, ModuleDefinition rootModule )
         {
             if ( string.IsNullOrEmpty( xmlDocFile ) )
                 throw new ArgumentNullException( "xmlDocFile" );
+
+            if ( rootModule == null )
+                throw new ArgumentNullException( "rootModule" );
 
             if ( !File.Exists( xmlDocFile ) )
                 throw new FileNotFoundException( "File not found.", xmlDocFile );
@@ -121,7 +123,11 @@ namespace PoshBuild
             xslWrapBareText.Load( typeof( Xsl.WrapBareText ) );
 
             var xslArgs = new XsltArgumentList();
-            xslArgs.AddExtensionObject( "urn:poshbuild", new XslExtensions( GetPSPrettyNameForIdentifier ) );
+            xslArgs.AddExtensionObject(
+                "urn:poshbuild",
+                new XslExtensions(
+                    ( declaringMemberIdentifier, identifier, style, precedingIdentifiersInScope ) =>
+                        GetPSPrettyNameForIdentifier( declaringMemberIdentifier, identifier, style, precedingIdentifiersInScope, rootModule ) ) );
             
             try
             {
@@ -170,12 +176,12 @@ namespace PoshBuild
             }
         }
 
-        bool WriteDescription( XmlWriter writer, MemberInfo member, string elementName )
+        bool WriteDescription( XmlWriter writer, MemberReference member, string elementName )
         {
             return WriteDescriptionEx( writer, member, "ps" + elementName, elementName );
         }
 
-        bool WriteDescriptionEx( XmlWriter writer, MemberInfo member, params string[] subQueries )
+        bool WriteDescriptionEx( XmlWriter writer, MemberReference member, params string[] subQueries )
         {
             var id = GetIdentifier( member );
 
@@ -204,7 +210,7 @@ namespace PoshBuild
         /// positioned within a <c>&lt;maml:description></c> element.
         /// </summary>
         /// <returns><c>true</c> if synopsis information was written; otherwise <c>false</c>.</returns>
-        override public bool WriteCmdletSynopsis( XmlWriter writer, Type cmdlet )
+        override public bool WriteCmdletSynopsis( XmlWriter writer, TypeDefinition cmdlet )
         {
             return WriteDescription( writer, cmdlet, "summary" );
         }
@@ -214,27 +220,27 @@ namespace PoshBuild
         /// positioned within a <c>&lt;maml:description></c> element.
         /// </summary>
         /// <returns><c>true</c> if synopsis information was written; otherwise <c>false</c>.</returns>
-        override public bool WriteCmdletDescription( XmlWriter writer, Type cmdlet )
+        override public bool WriteCmdletDescription( XmlWriter writer, TypeDefinition cmdlet )
         {
             return WriteDescription( writer, cmdlet, "remarks" );
         }
 
-        public override bool WriteParameterDescription( XmlWriter writer, PropertyInfo property, string parameterSetName )
+        public override bool WriteParameterDescription( XmlWriter writer, PropertyDefinition property, string parameterSetName )
         {
             return WriteDescription( writer, property, "summary" );
         }
 
-        public override bool WriteReturnValueDescription( XmlWriter writer, Type cmdlet, string outputTypeName )
+        public override bool WriteReturnValueDescription( XmlWriter writer, TypeDefinition cmdlet, string outputTypeName )
         {
             return WriteDescriptionEx( writer, cmdlet, string.Format( "psoutput[@cref='T:{0}']", outputTypeName ) );
         }
 
-        public override bool WriteInputTypeDescription( XmlWriter writer, Type cmdlet, string inputTypeName )
+        public override bool WriteInputTypeDescription( XmlWriter writer, TypeDefinition cmdlet, string inputTypeName )
         {
             return WriteDescriptionEx( writer, cmdlet, string.Format( "psinput[@cref='T:{0}']", inputTypeName ) );
         }
 
-        public override bool WriteCmdletExamples( XmlWriter writer, Type cmdlet )
+        public override bool WriteCmdletExamples( XmlWriter writer, TypeDefinition cmdlet )
         {
             var id = GetIdentifier( cmdlet );
 
@@ -251,7 +257,7 @@ namespace PoshBuild
             return didWrite;
         }
 
-        public override bool WriteCmdletNotes( XmlWriter writer, Type cmdlet )
+        public override bool WriteCmdletNotes( XmlWriter writer, TypeDefinition cmdlet )
         {
             var id = GetIdentifier( cmdlet );
 
@@ -268,7 +274,7 @@ namespace PoshBuild
             return didWrite;
         }
 
-        public override bool WriteCmdletRelatedLinks( XmlWriter writer, Type cmdlet )
+        public override bool WriteCmdletRelatedLinks( XmlWriter writer, TypeDefinition cmdlet )
         {
             var id = GetIdentifier( cmdlet );
 
@@ -285,7 +291,7 @@ namespace PoshBuild
             return didWrite;
         }
 
-        public override bool TryGetPropertySupportsGlobbing( PropertyInfo property, string parameterSetName, out bool supportsGlobbing )
+        public override bool TryGetPropertySupportsGlobbing( PropertyDefinition property, string parameterSetName, out bool supportsGlobbing )
         {
             supportsGlobbing = default( bool );
             var id = GetIdentifier( property );
@@ -306,19 +312,31 @@ namespace PoshBuild
                 return false;
         }
 
-        static string GetIdentifier( MemberInfo member )
+        static string GetIdentifier( MemberReference member )
         {
-            switch ( member.MemberType )
-            {
-                case MemberTypes.TypeInfo:
-                    return string.Format( "T:{0}", ( ( Type ) member ).FullName );
-                case MemberTypes.Property:
-                    return string.Format( "P:{0}.{1}", member.DeclaringType.FullName, ( ( PropertyInfo ) member ).Name );
-                case MemberTypes.Field:
-                    return string.Format( "F:{0}.{1}", member.DeclaringType.FullName, ( ( PropertyInfo ) member ).Name );
-                default:
-                    throw new NotSupportedException();
-            }
+            if ( member is PropertyReference )
+                return GetIdentifier( ( PropertyReference ) member );
+            else if ( member is TypeReference )
+                return GetIdentifier( ( TypeReference ) member );
+            else if ( member is FieldReference )
+                return GetIdentifier( ( FieldReference ) member );
+            else
+                throw new NotSupportedException();
+        }
+
+        static string GetIdentifier( PropertyReference member )
+        {
+            return string.Format( "P:{0}.{1}", member.DeclaringType.FullName, member.Name );
+        }
+
+        static string GetIdentifier( FieldReference member )
+        {
+            return string.Format( "F:{0}.{1}", member.DeclaringType.FullName, member.Name );
+        }
+
+        static string GetIdentifier( TypeReference member )
+        {
+            return string.Format( "T:{0}", member.FullName );
         }
 
         struct XmlDocIdentifier
@@ -425,10 +443,18 @@ namespace PoshBuild
             }
         }
 
-        static string GetPSPrettyNameForIdentifier( string declaringMemberIdentifier, string identifier, TypenameRenderingStyle trs, IEnumerable<string> precedingIdentifiersInScope )
+        static string GetPSPrettyNameForIdentifier( 
+            string declaringMemberIdentifier, 
+            string identifier, 
+            TypenameRenderingStyle trs, 
+            IEnumerable<string> precedingIdentifiersInScope,
+            ModuleDefinition rootModule )
         {
             if ( precedingIdentifiersInScope == null )
                 throw new ArgumentNullException("precedingIdentifiersInScope");
+
+            if ( rootModule == null )
+                throw new ArgumentNullException( "rootModule" );
 
             if ( string.IsNullOrWhiteSpace( identifier ) )
                 return string.Empty;
@@ -511,7 +537,7 @@ namespace PoshBuild
                 case TypenameRenderingStyle.Full:
                     if ( xdiId.IsCtor || xdiDM.TypeFullName != xdiId.TypeFullName )
                     {
-                        var prettyName = TypeNameHelper.GetPSPrettyName( xdiId.TypeFullName );
+                        var prettyName = TypeNameHelper.GetPSPrettyName( xdiId.TypeFullName, rootModule );
 
                         // If GetPSPrettyName didn't transform the full typename, and this is a local reference, just use the type name, not the full name.
                         // Also don't use the full name if this is not the first reference in scope.
@@ -535,7 +561,7 @@ namespace PoshBuild
                 sb.Append( xdiId.Member );
 
             if ( xdiId.Overload != null )
-                sb.Append( PrettifyMemberOverload2( xdiId.Overload ) );
+                sb.Append( PrettifyMemberOverload( xdiId.Overload, rootModule ) );
             else if ( xdiId.IsCtor )
                 sb.Append( "()" );
 
@@ -586,7 +612,7 @@ namespace PoshBuild
         /// <summary>
         /// Prettifies the portion of an xmldoc identifier in parentheses and thereafter (eg, method arguments)
         /// </summary>
-        static string PrettifyMemberOverload2( string overload )
+        static string PrettifyMemberOverload( string overload, ModuleDefinition rootModule )
         {
             if ( string.IsNullOrWhiteSpace( overload ) )
                 return overload;
@@ -611,7 +637,7 @@ namespace PoshBuild
                     if ( g.Index > lastIndex )
                         AppendRawOverloadPart( sb, overload.Substring( lastIndex, g.Index - lastIndex ) );
 
-                    sb.Append( TypeNameHelper.GetPSPrettyName( g.Value ) );
+                    sb.Append( TypeNameHelper.GetPSPrettyName( g.Value, rootModule ) );
 
                     lastIndex = g.Index + g.Length;
                 }

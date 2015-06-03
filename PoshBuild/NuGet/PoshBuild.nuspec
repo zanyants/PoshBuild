@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
   <metadata>
     <id>PoshBuild</id>
-    <version>0.2.0-alpha-07</version>
+    <version>0.2.0-alpha-08</version>
     <title>PoshBuild</title>
     <authors>PoshBuild Contributors</authors>
     <owners>Zany Ants</owners>
@@ -18,6 +18,6 @@
   </metadata>
   <files>
     <file src="PoshBuild.targets" target="build" />
-    <file src="..\bin\release\PoshBuild*.dll" target="tools" />
+    <file src="..\bin\release\*.dll" target="tools" />
   </files>
 </package>

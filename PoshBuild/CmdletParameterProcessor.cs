@@ -64,7 +64,7 @@ namespace PoshBuild
 
             _docSource.WriteParameterDescription( 
                 _writer, 
-                _parameter.PropertyInfo, 
+                _parameter.PropertyDefinition, 
                 parameterSetIndex == CmdletParameterInfo.NonSpecificParameterSetIndex ? 
                     null : 
                     _parameter.ParameterAttributes[ parameterSetIndex ].ParameterSetName );
@@ -73,7 +73,7 @@ namespace PoshBuild
 
             if ( _parameter.ParameterType.IsEnum )
             {
-                var enumNames = _parameter.ParameterType.GetEnumNames();
+                var enumNames = _parameter.ParameterType.GetEnumNames().ToList();
 
                 _writer.WriteStartElement( "command", "parameterValue", null );
 
@@ -104,8 +104,15 @@ namespace PoshBuild
             {
                 _writer.WriteStartElement( "command", "parameterValue", null );
 
-                _writer.WriteAttributeString( "required", ( _parameter.ParameterType != typeof( SwitchParameter ) ).ToStringLower() );
-                _writer.WriteAttributeString( "variableLength", ( typeof( IEnumerable ).IsAssignableFrom( _parameter.ParameterType ) ).ToStringLower() );
+                var tSwitchParameter = _parameter.PropertyDefinition.Module.Import( typeof( SwitchParameter ) );
+                var tIEnumerable = _parameter.PropertyDefinition.Module.Import( typeof( IEnumerable ) );
+
+                var isSwitchParameter = _parameter.ParameterType.IsSame( tSwitchParameter, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion );
+                var implementsIEnumerable = _parameter.ParameterType.Interfaces.Any( tr => tr.IsSame( tIEnumerable, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) );
+                var isVariableLength = implementsIEnumerable || _parameter.ParameterType.IsArray;
+
+                _writer.WriteAttributeString( "required", ( !isSwitchParameter ).ToStringLower() );
+                _writer.WriteAttributeString( "variableLength", ( isVariableLength ).ToStringLower() );
                 _writer.WriteString( _parameter.ParameterType.GetPSPrettyName() );
 
                 _writer.WriteEndElement(); // </command:parameterValue>
