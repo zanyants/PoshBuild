@@ -31,6 +31,23 @@ namespace PoshBuild.Build
         public ITaskItem Assembly { get; set; }
 
         /// <summary>
+        /// The assembly references resolved by the build process. You should normally pass @(ReferencePath) to this parameter.
+        /// @(ReferencePath) is defined by the standard Microsoft targets.
+        /// </summary>
+        public ITaskItem[] ReferencePaths { get; set; }
+
+        /// <summary>
+        /// Additional paths to search when resolving assembly references. You should normally pass "$(OutDir);$(IntermediateOutputPath);$(ReferencePath);$(TargetFrameworkDirectory)"
+        /// to this parameter.
+        /// </summary>
+        public ITaskItem[] AdditionalAssemblySearchPaths { get; set; }
+
+        /// <summary>
+        /// A file like <c>app.config</c> from which binding redirects are read. Used when resolving assembly references.
+        /// </summary>
+        public ITaskItem HostConfigurationFile { get; set; }
+
+        /// <summary>
         /// The compiler-generated XML documentation file. Defaults to %(Assembly.FullPath) with the extension replaced with '.xml'.
         /// </summary>
         public ITaskItem XmlDocumentationFile { get; set; }
@@ -132,11 +149,14 @@ namespace PoshBuild.Build
                 var assemblyPath = Assembly.GetMetadata( "FullPath" );
                 var assemblyName = Assembly.GetMetadata( "Filename" );
 
+                var readerParameters = new ReaderParameters();
+                readerParameters.AssemblyResolver = BuildTimeAssemblyResolver.Create( ReferencePaths, AdditionalAssemblySearchPaths, HostConfigurationFile, Log );
+                
                 AssemblyDefinition assembly = null;
 
                 try
                 {
-                    assembly = AssemblyDefinition.ReadAssembly( assemblyPath );
+                    assembly = AssemblyDefinition.ReadAssembly( assemblyPath, readerParameters );
                 }
                 catch ( Exception e )
                 {

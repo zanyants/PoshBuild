@@ -4,7 +4,6 @@
 
   <!-- (c) 2015 PoshBuild Contributors. Released under the Microsoft Public License (Ms-PL)-->
 
-  <!--
   <PropertyGroup>
     <PoshBuildDll>$(MSBuildThisFileDirectory)..\tools\PoshBuild.dll</PoshBuildDll>
   </PropertyGroup>
@@ -16,7 +15,7 @@
   <UsingTask
     TaskName="PoshBuild.Build.GenerateDisplayFormat"
     AssemblyFile="$(PoshBuildDll)" />
--->
+
   <!-- 
       Set PoshBuild defaults if not already defined.
       
@@ -36,7 +35,7 @@
     
     <!-- The name of the output help file (without directory, with extension). -->
     <PoshBuildOutputHelpFileName Condition=" '$(PoshBuildOutputHelpFileName)' == '' ">$(TargetFileName)-Help.xml</PoshBuildOutputHelpFileName>
-    
+
     <!-- 
       Other properties with no defaults:
       ==================================
@@ -45,16 +44,24 @@
       
         By default, the output file is written to the project's output directory $(TargetDir). $(PoshBuildRelativeOutputDir) can be 
         set to have the output file written to a subdirectory under $(TargetDir), for example 'PSModules\MyPSModule\'.
-    -->    
+        
+      $(PoshBuildHostConfigurationFile)
+      
+        An app.config-style file that defines assembly binding/redirection policy. If not set explicitly, this defaults to the project's
+        app.config file, if it has one. Otherwise no file is used.
+
+    -->
   </PropertyGroup>
 
-  <!-- Other properties/items used internally (these should not be set/used externally): -->
+  <!-- Prepare properties/items used internally (these should not be set/used externally): -->
   
   <PropertyGroup
     Condition=" '$(DisablePoshBuild)' != 'true' ">
     <_PoshBuildIntermediateOutputPath>$(IntermediateOutputPath)_PoshBuild_$(PoshBuildOutputHelpFileName)</_PoshBuildIntermediateOutputPath>
     <PoshBuildRelativeOutputDir Condition="'$(PoshBuildRelativeOutputDir)' != '' and !HasTrailingSlash('$(PoshBuildRelativeOutputDir)')">$(PoshBuildRelativeOutputDir)\</PoshBuildRelativeOutputDir>
+    <_PoshBuildProjectAppConfigFile />
   </PropertyGroup>
+
   
   <!-- 
     Add a Content item that will cause the generated intermediate file to be copied to the desired output dir. This is done
@@ -70,17 +77,37 @@
       <Visible>false</Visible>
     </Content>    
   </ItemGroup>
-  
+
+  <Target
+    Name="PoshBuild_Init"
+    DependsOnTargets="PrepareForBuild">
+
+    <!-- If not explicitly defined, $(AppConfig) is set in the PrepareForBuild target. -->
+    <PropertyGroup>
+      <PoshBuildHostConfigurationFile Condition=" '$(PoshBuildHostConfigurationFile)' == '' ">$(AppConfig)</PoshBuildHostConfigurationFile>
+    </PropertyGroup>
+    
+    <ItemGroup>
+      <_PoshBuildHostConfigurationFile Remove="@(_PoshBuildHostConfigurationFile)" />
+      <_PoshBuildHostConfigurationFile Include="$(PoshBuildHostConfigurationFile)" />
+    </ItemGroup>
+
+  </Target>
+    
   <Target
     Name="PoshBuild"
-    Inputs="$(PoshBuildAssemblyPath);$(PoshBuildXmlDocumentationPath)"
+    DependsOnTargets="PoshBuild_Init;ResolveAssemblyReferences"
+    Inputs="$(PoshBuildAssemblyPath);$(PoshBuildXmlDocumentationPath);@(PoshBuildDescriptorAssemblies);@(_PoshBuildHostConfigurationFile)"
     Outputs="$(_PoshBuildIntermediateOutputPath)">
-
+    
     <PoshBuild.Build.GenerateCmdletHelp
       Assembly="$(PoshBuildAssemblyPath)"      
       DocSources="$(PoshBuildDocSources)"
       XmlDocumentationFile="$(PoshBuildXmlDocumentationPath)"
       DescriptorAssemblies="@(PoshBuildDescriptorAssemblies)"
+      ReferencePaths="@(ReferencePath)"
+      AdditionalAssemblySearchPaths="$(OutDir);$(IntermediateOutputPath);$(ReferencePath);$(TargetFrameworkDirectory)"
+      HostConfigurationFile="@(_PoshBuildHostConfigurationFile)"
       OutputHelpFile="$(_PoshBuildIntermediateOutputPath)" >
 
       <Output
