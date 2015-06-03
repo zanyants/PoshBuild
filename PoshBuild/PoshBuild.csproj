@@ -64,6 +64,7 @@
   <ItemGroup>
     <Compile Include="AssemblyProcessor.cs" />
     <Compile Include="AttributeBasedDocSource.cs" />
+    <Compile Include="BuildTimeAssemblyResolver.cs" />
     <Compile Include="Build\GenerateCmdletHelp.cs" />
     <Compile Include="Build\GenerateDisplayFormat.cs" />
     <Compile Include="CecilExtensions.cs" />
