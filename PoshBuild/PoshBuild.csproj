@@ -78,7 +78,7 @@
     <Compile Include="ComponentModel\GlobbingAttribute.cs" />
     <Compile Include="ComponentModel\ICmdletHelpDescriptor.cs" />
     <Compile Include="ComponentModel\IDisplayFormatDescriptor.cs" />
-    <Compile Include="DescriptorDocSource.cs" />
+    <None Include="DescriptorDocSource.cs" />
     <Compile Include="DisplayFormat.cs" />
     <Compile Include="DisplayFormatPropertiesInfo.cs" />
     <Compile Include="DisplayFormatPropertyInfo.cs" />
