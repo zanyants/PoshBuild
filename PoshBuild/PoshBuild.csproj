@@ -66,6 +66,7 @@
     <Compile Include="AttributeBasedDocSource.cs" />
     <Compile Include="Build\GenerateCmdletHelp.cs" />
     <Compile Include="Build\GenerateDisplayFormat.cs" />
+    <Compile Include="CecilExtensions.cs" />
     <Compile Include="CmdletParameterInfo.cs" />
     <Compile Include="CmdletParameterProcessor.cs" />
     <Compile Include="CmdletParametersInfo.cs" />
