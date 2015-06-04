@@ -18,18 +18,22 @@ namespace PoshBuild
 
             var tParameterAttribute = cmdletType.Module.Import( typeof( ParameterAttribute ) );
 
-            Parameters = new List<CmdletParameterInfo>();
-
-            foreach ( PropertyDefinition property in cmdletType.Properties )
-            {
-                if ( property.GetMethod.IsPublic && property.SetMethod.IsPublic )
-                {
-                    if ( property.CustomAttributes.Any( ca => ca.AttributeType.IsSame( tParameterAttribute, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) ) )
-                    {
-                        Parameters.Add( new CmdletParameterInfo( property, docSource ) );
-                    }
-                }
-            }
+            Parameters =
+                cmdletType
+                .SelfAndBaseTypes()
+                .TakeWhile( t => t.FullName != "System.Management.Automation.Cmdlet" && t.FullName != "System.Management.Automation.PSCmdlet" )
+                .SelectMany(
+                    t => t.Properties )
+                .Where(
+                    property =>
+                        property.GetMethod != null && property.GetMethod.IsPublic &&
+                        property.SetMethod != null && property.SetMethod.IsPublic &&
+                        property
+                        .CustomAttributes
+                        .Any( ca => ca.AttributeType.IsSame( tParameterAttribute, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) ) )
+                .Select( 
+                    property => new CmdletParameterInfo( property, docSource ) )
+                .ToList();
 
             ParametersByParameterSet = new Dictionary<string, IList<CmdletParameterInfo>>();
             List<CmdletParameterInfo> parametersInAllSets = new List<CmdletParameterInfo>();
