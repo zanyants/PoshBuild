@@ -16,6 +16,6 @@ PoshBuild is released under the [Microsoft Public License (MS-PL)](http://openso
 PoshBuild is distributed as a NuGet package at https://www.nuget.org/packages/PoshBuild
 
 # Using PoshBuild
-Add the PoshBuild NuGet package to your PowerShell snap-in or binary module C# (or other CLR language) project and an `{assembly}-Help.xml` file will be generated alongside the project's output assembly. To have PoshBuild pick up XML documentation comments from your source code, make sure that 'XML documentation file' generation is enabled in project settings, Build tab, Output section. Custom tags can be used within XML documentation comments to generate a wide variety of PowerShell documentation elements - this is not yet documented (TODO).
+Add the PoshBuild NuGet package to your PowerShell snap-in or binary module C# (or other CLR language) project and an `{assembly}-Help.xml` file will be generated alongside the project's output assembly. To have PoshBuild pick up XML documentation comments from your source code, make sure that 'XML documentation file' generation is enabled in project settings, Build tab, Output section. Custom tags can be used within XML documentation comments to generate a wide variety of PowerShell documentation elements - see [this wiki page](https://github.com/zanyants/PoshBuild/wiki/XML-Documentation-Comments).
 
 Note that the project is in a phase of active pre-release development, so there may be breaking changes prior to release.
