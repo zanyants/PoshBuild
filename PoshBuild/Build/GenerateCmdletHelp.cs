@@ -150,7 +150,8 @@ namespace PoshBuild.Build
                 var assemblyName = Assembly.GetMetadata( "Filename" );
 
                 var readerParameters = new ReaderParameters();
-                readerParameters.AssemblyResolver = BuildTimeAssemblyResolver.Create( ReferencePaths, AdditionalAssemblySearchPaths, HostConfigurationFile, Log );
+                var assemblyResolver = BuildTimeAssemblyResolver.Create( ReferencePaths, AdditionalAssemblySearchPaths, HostConfigurationFile, Log );
+                readerParameters.AssemblyResolver = assemblyResolver;
                 
                 AssemblyDefinition assembly = null;
 
@@ -170,6 +171,8 @@ namespace PoshBuild.Build
 
                     return false;
                 }
+
+                assemblyResolver.AddAssembly( assembly, assemblyPath );
 
                 var xmlDocPath = XmlDocumentationFile == null ? null : XmlDocumentationFile.GetMetadata( "FullPath" );
                 if ( string.IsNullOrEmpty( xmlDocPath ) )
@@ -195,20 +198,27 @@ namespace PoshBuild.Build
                                 case DocSourceNames.Reflection:
                                     return ( IDocSource ) new ReflectionDocSource();
                                 case DocSourceNames.XmlDoc:
-                                    if ( File.Exists( xmlDocPath ) )
-                                        return ( IDocSource ) new XmlDocSource( xmlDocPath, assembly.MainModule );
-                                    else
                                     {
-                                        Log.LogWarning( "PoshBuild",
-                                            "PB01",
-                                            "",
-                                            null,
-                                            0, 0, 0, 0,
-                                            "The compiler-generated documentation file '{0}' was not found, XmlDoc will not be used as a documentation source for assembly '{1}'.",
-                                            xmlDocPath,
-                                            assemblyName );
+                                        var ds = new PerAssemblyXmlDocSource();
 
-                                        return null;
+                                        if ( File.Exists( xmlDocPath ) )
+                                        {
+                                            var rootDs = new XmlDocSource( xmlDocPath, assembly.MainModule );
+                                            ds.Add( assembly, rootDs );
+                                        }
+                                        else
+                                        {
+                                            Log.LogWarning( "PoshBuild",
+                                                "PB01",
+                                                "",
+                                                null,
+                                                0, 0, 0, 0,
+                                                "The compiler-generated documentation file '{0}' was not found, XmlDoc will not be used as a documentation source for assembly '{1}'.",
+                                                xmlDocPath,
+                                                assemblyName );
+                                        }
+
+                                        return ( IDocSource ) ds;
                                     }
                                 default:
                                     throw new NotImplementedException();
