@@ -15,7 +15,7 @@ namespace PoshBuild
     // https://msdn.microsoft.com/en-us/library/fsbx0t7x.aspx
 
     /// <summary>
-    /// An <see cref="IDocSource"/> implementation that retrieves documentation from compiler-generated XML documentation files.
+    /// An <see cref="IDocSource"/> implementation that retrieves documentation from a compiler-generated XML documentation file.
     /// </summary>
     sealed class XmlDocSource : DocSource
     {
