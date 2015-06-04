@@ -87,7 +87,10 @@
     <Compile Include="FallthroughDocSource.cs" />
     <Compile Include="FormattingExtensions.cs" />
     <Compile Include="IDocSource.cs" />
+    <Compile Include="KeyedByAssemblyDocSource.cs" />
+    <Compile Include="KeyedDocSource.cs" />
     <Compile Include="MoreLinq\MoreEnumerable.MaxBy.cs" />
+    <Compile Include="PerAssemblyXmlDocSource.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ComponentModel\SynopsisAttribute.cs" />
     <Compile Include="ReflectionDocSource.cs" />
