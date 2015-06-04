@@ -317,14 +317,16 @@ namespace PoshBuild
         void GenerateCommandNotes()
         {
             _writer.WriteStartElement( "maml", "alertSet", null );
-            _docSource.WriteCmdletNotes( _writer, _type );
+            foreach ( var t in _type.SelfAndBaseTypes().TakeWhile( t => t.FullName != "System.Management.Automation.Cmdlet" && t.FullName != "System.Management.Automation.PSCmdlet" ) )
+                _docSource.WriteCmdletNotes( _writer, t );
             _writer.WriteEndElement(); // </maml:alertSet>
         }
 
         void GenerateCommandRelatedLinks()
         {
             _writer.WriteStartElement( "maml", "relatedLinks", null );
-            _docSource.WriteCmdletRelatedLinks( _writer, _type );
+            foreach ( var t in _type.SelfAndBaseTypes().TakeWhile( t => t.FullName != "System.Management.Automation.Cmdlet" && t.FullName != "System.Management.Automation.PSCmdlet" ) )
+                _docSource.WriteCmdletRelatedLinks( _writer, t );            
             _writer.WriteEndElement(); // </maml:alertSet>
         }
     
