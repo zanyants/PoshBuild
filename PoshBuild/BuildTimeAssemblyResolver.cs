@@ -13,6 +13,12 @@ namespace PoshBuild
     /// </summary>
     sealed class BuildTimeAssemblyResolver : IAssemblyResolver
     {
+        struct ResolvedAssemblyInfo
+        {
+            public string Path;
+            public AssemblyDefinition AssemblyDefinition;
+        };
+
         // Redefine this to MessageImportance.High to ease development-time debugging.
         const MessageImportance MessageImportanceLow = MessageImportance.Low;
 
@@ -23,7 +29,7 @@ namespace PoshBuild
         Dictionary<string, string> _unloadedReferencePaths;
 
         // Resolved assemblies keyed on assembly full name.
-        Dictionary<string, AssemblyDefinition> _resolvedAssemblies;
+        Dictionary<string, ResolvedAssemblyInfo> _resolvedAssemblies;
 
         // Log messages to MSBuild.
         TaskLoggingHelper _log;
@@ -99,12 +105,31 @@ namespace PoshBuild
             else
                 _additionalSearchPaths = new List<string>();
 
-            _resolvedAssemblies = new Dictionary<string, AssemblyDefinition>();
+            _resolvedAssemblies = new Dictionary<string, ResolvedAssemblyInfo>();
+        }
+
+        /// <summary>
+        /// Returns the path from which an assembly was loaded by this resolver, or <c>null</c> if the assembly was not loaded by this resolver.
+        /// </summary>
+        public string GetLoadPath( AssemblyDefinition assembly )
+        {
+            return _resolvedAssemblies.Values.FirstOrDefault( v => ReferenceEquals( v.AssemblyDefinition, assembly ) ).Path;
+        }
+
+        public void AddAssembly( AssemblyDefinition assembly, string loadPath )
+        {
+            if ( assembly == null )
+                throw new ArgumentNullException( "assembly" );
+
+            _resolvedAssemblies.Add( assembly.FullName, new ResolvedAssemblyInfo { AssemblyDefinition = assembly, Path = loadPath } );
         }
 
         public AssemblyDefinition Resolve( AssemblyNameReference name, ReaderParameters parameters )
         {
             _log.LogMessage( MessageImportanceLow, "Resolving {0}", name );
+
+            parameters.AssemblyResolver = this;
+
             if ( _policyAppDomain != null )
             {
                 var afterPolicyStr = _policyAppDomain.ApplyPolicy( name.FullName );
@@ -112,7 +137,7 @@ namespace PoshBuild
                 name = AssemblyNameReference.Parse( afterPolicyStr );
             }
 
-            AssemblyDefinition result = null;
+            ResolvedAssemblyInfo result;            
 
             if ( _resolvedAssemblies.TryGetValue( name.FullName, out result ) )
             {
@@ -127,7 +152,9 @@ namespace PoshBuild
                     _log.LogMessage( MessageImportanceLow, "   Loading from ReferencePath {0}", fullPath );
                     try
                     {
-                        result = AssemblyDefinition.ReadAssembly( fullPath, parameters );
+                        var assy = AssemblyDefinition.ReadAssembly( fullPath, parameters );
+                        result.Path = fullPath;
+                        result.AssemblyDefinition = assy;
                     }
                     catch ( Exception e )
                     {
@@ -169,7 +196,8 @@ namespace PoshBuild
 
                                 if ( assy.Name.FullName == name.FullName )
                                 {
-                                    result = assy;
+                                    result.Path = path;
+                                    result.AssemblyDefinition = assy;
                                     _log.LogMessage( MessageImportanceLow, "      Is match." );
                                 }
                                 else
@@ -187,12 +215,12 @@ namespace PoshBuild
                 _resolvedAssemblies.Add( name.FullName, result );
             }
 
-            if ( result == null )
+            if ( result.AssemblyDefinition == null )
                 _log.LogMessage( MessageImportanceLow, "   Not resolved." );
             else
-                _log.LogMessage( MessageImportanceLow, "   Resolved to {0}", result.FullName );
+                _log.LogMessage( MessageImportanceLow, "   Resolved to {0}", result.AssemblyDefinition.FullName );
 
-            return result;
+            return result.AssemblyDefinition;
         }
 
         public AssemblyDefinition Resolve( string fullName, ReaderParameters parameters )
