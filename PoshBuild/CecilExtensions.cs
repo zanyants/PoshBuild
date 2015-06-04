@@ -150,15 +150,43 @@ namespace PoshBuild
         /// <summary>
         /// Enumerates the base types of the current type.
         /// </summary>
-        public static IEnumerable<TypeDefinition> BaseTypes( this TypeDefinition td )
+        public static IEnumerable<TypeDefinition> BaseTypes( this TypeDefinition type )
         {
-            var refBase = td.BaseType;
+            if ( type == null )
+                throw new ArgumentNullException( "type" );
+
+            var refBase = type.BaseType;
 
             while ( refBase != null )
             {
                 var tdBase = refBase.Resolve();
+
                 if ( tdBase != null )
                     yield return tdBase;
+
+                refBase = tdBase.BaseType;
+            }
+        }
+
+        /// <summary>
+        /// Enumerates the current type and its base types.
+        /// </summary>
+        public static IEnumerable<TypeDefinition> SelfAndBaseTypes( this TypeDefinition type )
+        {
+            if ( type == null )
+                throw new ArgumentNullException( "type" );
+
+            yield return type;
+
+            var refBase = type.BaseType;
+
+            while ( refBase != null )
+            {
+                var tdBase = refBase.Resolve();
+
+                if ( tdBase != null )
+                    yield return tdBase;
+
                 refBase = tdBase.BaseType;
             }
         }
