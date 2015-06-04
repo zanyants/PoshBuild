@@ -5,7 +5,7 @@ The original version of PoshBuild (0.1.0) was authored by Ludovic Chabant in 200
 # Contributors
 Contributions to the PoshBuild project have been made by the PoshBuild Contributors, jointly:
 * For version 0.1.0:
-  * Ludovic Chabant, (C) 2008 Electronic Arts Inc.
+  * Ludovic Chabant, (C) 2008 Ludovic Chabant. Note: The original 0.1.0 code indicates a different copyright - Ludovic has stated that this was an unintended error and that the copyright actually resides with him personally.
 * For version 0.2.0
   * Tom Glastonbury, (C) 2015 Zany Ants Ltd.
 
