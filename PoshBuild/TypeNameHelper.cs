@@ -47,6 +47,67 @@ namespace PoshBuild
             _mapByFullName = _map.ToDictionary( kvp => kvp.Key.FullName, kvp => kvp.Value );
         }
 
+        public sealed class PreparedTypeInformation
+        {
+            public PreparedTypeInformation( string originalFullName, TypeDefinition type, bool includeGenericParameters )
+            {
+                OriginalFullName = originalFullName;
+                Type = type;
+                IncludeGenericParameters = includeGenericParameters;
+            }
+
+            public string OriginalFullName { get; private set; }
+            public TypeDefinition Type { get; private set; }
+            public bool IncludeGenericParameters { get; private set; }
+        }
+
+
+        /// <summary>
+        /// Performs initial verification and type resolution, returning the information required to proceeed with prettification.
+        /// It is useful for some code to perform this step explicitly, then decide what to do next based on the result.
+        /// </summary>
+        public static PreparedTypeInformation PrepareForPrettification( string typeFullName, ModuleDefinition contextModule )
+        {
+            if ( contextModule == null )
+                throw new ArgumentNullException( "contextModule" );
+
+            if ( string.IsNullOrWhiteSpace( typeFullName ) )
+                return new PreparedTypeInformation( typeFullName, null, false );
+
+            if ( typeFullName.IndexOfAny( "[]{},".ToCharArray() ) != -1 )
+                throw new ArgumentException( "Generic parameter and element notation is not permitted.", "typeFullName" );
+
+            if ( typeFullName.IndexOfAny( "^*&@".ToCharArray() ) != -1 )
+                throw new ArgumentException( "Type modifier notation is not permitted.", "typeFullName" );
+
+            TypeDefinition type = null;
+            bool includeGenericParameters = false;
+
+            if ( typeFullName == "System.Collections.Generic.IEnumerable`1" )
+            {
+                type = contextModule.Import( typeof( IEnumerable<> ) ).Resolve();
+                includeGenericParameters = true;
+            }
+            else if ( typeFullName == "System.Collections.Generic.IEnumerable" )
+            {
+                type = contextModule.Import( typeof( IEnumerable<> ) ).Resolve();
+                includeGenericParameters = false;
+            }
+            else
+            {
+                // The only other types we prettify come from either mscorlib or System.Management.Automation, so try to
+                // resolve from those locations.
+                type = ( ( BuildTimeAssemblyResolver ) contextModule.AssemblyResolver ).FindPublicType( typeFullName ).FirstOrDefault();
+#if F
+                type =
+                    Type.GetType( typeFullName ) ??
+                    typeof( PSObject ).Assembly.GetType( typeFullName );
+#endif
+            }
+
+            return new PreparedTypeInformation( typeFullName, type, includeGenericParameters );
+        }
+
         /// <summary>
         /// Returns a pretty PowerShell-style name for a specified full name of a type (eg, <c>System.String</c>).
         /// </summary>
@@ -59,40 +120,18 @@ namespace PoshBuild
         /// <returns>The pretty name of the type.</returns>
         public static string GetPSPrettyName( string typeFullName, ModuleDefinition contextModule )
         {
-            if ( string.IsNullOrWhiteSpace( typeFullName ) )
-                return typeFullName;
+            return GetPSPrettyName( PrepareForPrettification( typeFullName, contextModule ) );
+        }
 
-            if ( typeFullName.IndexOfAny( "[]{},".ToCharArray() ) != -1 )
-                throw new ArgumentException( "Generic parameter and element notation is not permitted.", "typeFullName" );
+        public static string GetPSPrettyName( PreparedTypeInformation prepared )
+        {
+            if ( prepared == null )
+                throw new ArgumentNullException( "prepared" );
 
-            if ( typeFullName.IndexOfAny( "^*&@".ToCharArray() ) != -1 )
-                throw new ArgumentException( "Type modifier notation is not permitted.", "typeFullName" );
-
-            Type type = null;
-            bool includeGenericParameters = true;
-
-            if ( typeFullName == "System.Collections.Generic.IEnumerable`1" )
-            {
-                type = typeof( IEnumerable<> );
-            }
-            else if ( typeFullName == "System.Collections.Generic.IEnumerable" )
-            {
-                type = typeof( IEnumerable<> );
-                includeGenericParameters = false;
-            }
+            if ( prepared.Type == null )
+                return prepared.OriginalFullName;
             else
-            {
-                // The only other types we prettify come from either mscorlib or System.Management.Automation, so try to
-                // resolve from those locations.
-                type =
-                    Type.GetType( typeFullName ) ??
-                    typeof( PSObject ).Assembly.GetType( typeFullName );
-            }
-
-            if ( type == null )
-                return typeFullName;
-            else
-                return _GetPSPrettyName( contextModule.Import( type ), includeGenericParameters );
+                return _GetPSPrettyName( prepared.Type, prepared.IncludeGenericParameters );
         }
 
         /// <summary>

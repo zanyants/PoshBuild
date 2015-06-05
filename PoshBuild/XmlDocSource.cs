@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Management.Automation;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
@@ -529,42 +530,68 @@ namespace PoshBuild
                     return xdiId.OriginalString;
             }
 
-            var sb = new StringBuilder();
+            var prep = TypeNameHelper.PrepareForPrettification( xdiId.TypeFullName, rootModule );
 
-            switch ( trs )
+            CmdletAttribute cmdletAttr = null;
+            var typeIsCmdlet = prep.Type != null && prep.Type.IsCmdlet( out cmdletAttr );            
+
+            bool isParameterProperty = false;
+
+            if ( typeIsCmdlet && xdiId.Kind == 'P' )
             {
-                case TypenameRenderingStyle.PrettyOrScopeContextual:
-                case TypenameRenderingStyle.Full:
-                    if ( xdiId.IsCtor || xdiDM.TypeFullName != xdiId.TypeFullName )
-                    {
-                        var prettyName = TypeNameHelper.GetPSPrettyName( xdiId.TypeFullName, rootModule );
-
-                        // If GetPSPrettyName didn't transform the full typename, and this is a local reference, just use the type name, not the full name.
-                        // Also don't use the full name if this is not the first reference in scope.
-                        if ( prettyName == xdiId.TypeFullName && ( xdiDM.TypeFullName == xdiId.TypeFullName || ( trs == TypenameRenderingStyle.PrettyOrScopeContextual && !isFirstUseOfTypeInScope ) ) )
-                            prettyName = xdiId.TypeName;
-
-                        sb.Append( prettyName );
-
-                        if ( !xdiId.IsCtor && xdiId.Member != null )
-                            sb.Append( '.' );
-                    }
-                    break;
-                case TypenameRenderingStyle.ForceFull:
-                    sb.Append( xdiId.TypeFullName );
-                    if ( !xdiId.IsCtor && xdiId.Member != null )
-                        sb.Append( '.' );
-                    break;
+                isParameterProperty = prep.Type.GetCmdletAndBaseProperties().Where( p => p.Name == xdiId.Member && p.IsCmdletParameter() ).Any();
             }
 
-            if ( !xdiId.IsCtor && xdiId.Member != null )
+            var sb = new StringBuilder();
+
+            if ( isParameterProperty && trs != TypenameRenderingStyle.ForceFull )
+            {
+                // Reference to a [Parameter] property. Unless forced, render as just the property name.
                 sb.Append( xdiId.Member );
+            }
+            else if ( typeIsCmdlet && xdiId.Kind == 'T' && trs != TypenameRenderingStyle.ForceFull )
+            {
+                // Reference to a cmdlet type. Unless forced, render as Verb-Noun.
+                sb.Append( cmdletAttr.VerbName );
+                sb.Append( '-' );
+                sb.Append( cmdletAttr.NounName );
+            }
+            else
+            {
+                switch ( trs )
+                {
+                    case TypenameRenderingStyle.PrettyOrScopeContextual:
+                    case TypenameRenderingStyle.Full:
+                        if ( xdiId.IsCtor || xdiDM.TypeFullName != xdiId.TypeFullName )
+                        {
+                            var prettyName = TypeNameHelper.GetPSPrettyName( prep );
 
-            if ( xdiId.Overload != null )
-                sb.Append( PrettifyMemberOverload( xdiId.Overload, rootModule ) );
-            else if ( xdiId.IsCtor )
-                sb.Append( "()" );
+                            // If GetPSPrettyName didn't transform the full typename, and this is a local reference, just use the type name, not the full name.
+                            // Also don't use the full name if this is not the first reference in scope.
+                            if ( prettyName == xdiId.TypeFullName && ( xdiDM.TypeFullName == xdiId.TypeFullName || ( trs == TypenameRenderingStyle.PrettyOrScopeContextual && !isFirstUseOfTypeInScope ) ) )
+                                prettyName = xdiId.TypeName;
 
+                            sb.Append( prettyName );
+
+                            if ( !xdiId.IsCtor && xdiId.Member != null )
+                                sb.Append( '.' );
+                        }
+                        break;
+                    case TypenameRenderingStyle.ForceFull:
+                        sb.Append( xdiId.TypeFullName );
+                        if ( !xdiId.IsCtor && xdiId.Member != null )
+                            sb.Append( '.' );
+                        break;
+                }
+
+                if ( !xdiId.IsCtor && xdiId.Member != null )
+                    sb.Append( xdiId.Member );
+
+                if ( xdiId.Overload != null )
+                    sb.Append( PrettifyMemberOverload( xdiId.Overload, rootModule ) );
+                else if ( xdiId.IsCtor )
+                    sb.Append( "()" );
+            }
             return sb.ToString();
         }
 

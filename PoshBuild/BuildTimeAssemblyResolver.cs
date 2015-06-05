@@ -20,21 +20,37 @@ namespace PoshBuild
         };
 
         // Redefine this to MessageImportance.High to ease development-time debugging.
-        const MessageImportance MessageImportanceLow = MessageImportance.Low;
+        const MessageImportance MessageImportanceLow = MessageImportance.High;
 
-        // Additional paths to search for assemblies.
+        /// <summary>
+        /// Additional paths to search for assemblies.
+        /// </summary>
         List<string> _additionalSearchPaths;
 
-        // Explicitly resolved paths from the build process, keyed on assembly full name.
+        /// <summary>
+        /// Explicitly resolved paths from the build process, keyed on assembly full name.
+        /// </summary>
         Dictionary<string, string> _unloadedReferencePaths;
 
-        // Resolved assemblies keyed on assembly full name.
+        /// <summary>
+        /// Resolved assemblies keyed on assembly full name.
+        /// </summary>
         Dictionary<string, ResolvedAssemblyInfo> _resolvedAssemblies;
 
-        // Log messages to MSBuild.
+        /// <summary>
+        /// Public types gathered as asemblies are loaded. Value is a single <see cref="TypeDefintion"/> or
+        /// a <see cref="List{TypeDefinition}"/> if there's more than one with the same name.
+        /// </summary>
+        Dictionary<string, object> _publicTypes;
+
+        /// <summary>
+        /// Log messages to MSBuild.
+        /// </summary>
         TaskLoggingHelper _log;
 
-        // AppDomain used purely for applying assembly binding policy using a supplied app.config-style file.
+        /// <summary>
+        /// AppDomain used purely for applying assembly binding policy using a supplied app.config-style file.
+        /// </summary>
         AppDomain _policyAppDomain;
 
         public static BuildTimeAssemblyResolver Create(
@@ -77,6 +93,8 @@ namespace PoshBuild
             _log = log;
             _policyAppDomain = policyAppDomain;
             _unloadedReferencePaths = new Dictionary<string, string>();
+            _publicTypes = new Dictionary<string, object>();
+
             if ( referencePaths != null )
             {
                 foreach ( var item in referencePaths )
@@ -108,6 +126,41 @@ namespace PoshBuild
             _resolvedAssemblies = new Dictionary<string, ResolvedAssemblyInfo>();
         }
 
+        void AddPublicTypes( AssemblyDefinition a )
+        {
+            if ( a == null )
+                throw new ArgumentNullException( "assembly" );
+
+            var publicTypes = 
+                a
+                .Modules
+                .SelectMany( mod => mod.Types )
+                .Where( t => t.IsPublic == true );
+
+            foreach ( var type in publicTypes )
+            {
+                var key = type.FullName;
+
+                object found;
+
+                if ( _publicTypes.TryGetValue( key, out found ) )
+                {
+                    var list = found as List<TypeDefinition>;
+
+                    if ( list == null )
+                    {
+                        list = new List<TypeDefinition>( 2 );
+                        _publicTypes[ key ] = list;
+                        list.Add( found as TypeDefinition );
+                    }
+
+                    list.Add( type );
+                }
+                else
+                    _publicTypes.Add( key, type );
+            }
+        }
+
         /// <summary>
         /// Returns the path from which an assembly was loaded by this resolver, or <c>null</c> if the assembly was not loaded by this resolver.
         /// </summary>
@@ -116,12 +169,89 @@ namespace PoshBuild
             return _resolvedAssemblies.Values.FirstOrDefault( v => ReferenceEquals( v.AssemblyDefinition, assembly ) ).Path;
         }
 
+        IEnumerable<TypeDefinition> _FindPublicTypeCacheOnly( string fullName )
+        {
+            object found;
+
+            if ( _publicTypes.TryGetValue( fullName, out found ) )
+            {
+                _log.LogMessage( MessageImportanceLow, "   Found in cache." );
+
+                var td = found as TypeDefinition;
+
+                if ( td != null )
+                    return new[] { td };
+
+                var list = found as List<TypeDefinition>;
+
+                if ( list != null )
+                {
+                    _log.LogMessage( MessageImportanceLow, "   Found multiple results ({0})", list.Count );
+                    return list;
+                }
+
+                // This should never happen.
+                throw new InvalidDataException();
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Find a public type by searching in all known assemblies.
+        /// </summary>
+        public IEnumerable<TypeDefinition> FindPublicType( string fullName )
+        {
+            _log.LogMessage( MessageImportanceLow, "FindPublicType {0}", fullName );
+
+            var foundInCache = _FindPublicTypeCacheOnly( fullName );
+
+            if ( foundInCache != null )
+                return foundInCache;
+
+            _log.LogMessage( MessageImportanceLow, "   Not found in cache." );
+            var parameters = new ReaderParameters();
+            parameters.AssemblyResolver = this;
+
+            while ( _unloadedReferencePaths.Count > 0 )
+            {
+                var kvp = ( ( IEnumerable<KeyValuePair<string, string>> ) _unloadedReferencePaths ).First();
+                _unloadedReferencePaths.Remove( kvp.Key );
+                _log.LogMessage( MessageImportanceLow, "   Loading from ReferencePath {0}", kvp.Value );
+                var rai = new ResolvedAssemblyInfo() { Path = kvp.Value };
+                try
+                {
+                    var assy = AssemblyDefinition.ReadAssembly( kvp.Value, parameters );
+                    rai.AssemblyDefinition = assy;
+                }
+                catch ( Exception e )
+                {
+                    _log.LogError( "Failed to load assembly from path {0}: {1}", kvp.Value, e.Message );
+                }
+
+                _resolvedAssemblies.Add( rai.AssemblyDefinition.FullName, rai );
+
+                if ( rai.AssemblyDefinition != null )
+                {
+                    AddPublicTypes( rai.AssemblyDefinition );
+                }
+
+                foundInCache = _FindPublicTypeCacheOnly( fullName );
+
+                if ( foundInCache != null )
+                    return foundInCache;
+            }
+
+            return Enumerable.Empty<TypeDefinition>();
+        }
+
         public void AddAssembly( AssemblyDefinition assembly, string loadPath )
         {
             if ( assembly == null )
                 throw new ArgumentNullException( "assembly" );
 
             _resolvedAssemblies.Add( assembly.FullName, new ResolvedAssemblyInfo { AssemblyDefinition = assembly, Path = loadPath } );
+            AddPublicTypes( assembly );
         }
 
         public AssemblyDefinition Resolve( AssemblyNameReference name, ReaderParameters parameters )
@@ -149,6 +279,7 @@ namespace PoshBuild
 
                 if ( _unloadedReferencePaths.TryGetValue( name.FullName, out fullPath ) )
                 {
+                    _unloadedReferencePaths.Remove( name.FullName );
                     _log.LogMessage( MessageImportanceLow, "   Loading from ReferencePath {0}", fullPath );
                     try
                     {
@@ -213,6 +344,8 @@ namespace PoshBuild
 
                 _log.LogMessage( MessageImportanceLow, "   Adding result to cache." );
                 _resolvedAssemblies.Add( name.FullName, result );
+                if ( result.AssemblyDefinition != null )
+                    AddPublicTypes( result.AssemblyDefinition );
             }
 
             if ( result.AssemblyDefinition == null )
