@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
   <metadata>
     <id>PoshBuild</id>
-    <version>0.2.0-alpha-1003</version>
+    <version>0.2.0-alpha-1005</version>
     <title>PoshBuild</title>
     <authors>PoshBuild Contributors</authors>
     <owners>Zany Ants</owners>
