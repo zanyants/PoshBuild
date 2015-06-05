@@ -69,13 +69,8 @@ namespace PoshBuild
                         // The assembly doesn't reference System.Management.Automation, nothing to do.
                         continue;
 
-                    foreach ( var type in module.Types.Where( t => t.IsPublic && !t.IsValueType && !t.IsAbstract ) )
-                    {
-                        if ( type.CustomAttributes.Any( ca => ca.AttributeType.IsSame( tCmdletAttribute, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) ) && type.IsSubclassOf( tCmdlet, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) )
-                        {
+                    foreach ( var type in module.Types.Where( t => t.IsPublic && !t.IsValueType && !t.IsAbstract && t.IsCmdlet() ) )
                             new CmdletTypeProcessor( _writer, type, _docSource ).GenerateHelpFileEntry();
-                        }
-                    }
                 }
 
                 GenerateHelpFileEnd();
