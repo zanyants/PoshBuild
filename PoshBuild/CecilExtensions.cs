@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Management.Automation;
 using Mono.Cecil;
 
 namespace PoshBuild
@@ -10,6 +11,101 @@ namespace PoshBuild
     /// </summary>
     static class CecilExtensions
     {
+        /// <summary>
+        /// Returns <c>true</c> if the current property appears to be a Cmdlet parameter.
+        /// </summary>
+        /// <remarks>
+        /// Must have public get and set, and at least one [Parameter] attribute.
+        /// </remarks>
+        public static bool IsCmdletParameter( this PropertyDefinition property )
+        {
+            var tParameterAttribute = property.Module.Import( typeof( ParameterAttribute ) );
+
+            return
+                property.GetMethod != null && property.GetMethod.IsPublic &&
+                property.SetMethod != null && property.SetMethod.IsPublic &&
+                property
+                .CustomAttributes
+                .Any( ca => ca.AttributeType.IsSame( tParameterAttribute, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) );
+        }
+
+        /// <summary>
+        /// Returns all the properties of the current type and its base types. Base types at or below <see cref="Cmdlet"/> or <see cref="PSCmdlet"/>
+        /// are not considered.
+        /// </summary>
+        public static IEnumerable<PropertyDefinition> GetCmdletAndBaseProperties( this TypeDefinition cmdletType )
+        {
+            var tCmdlet = cmdletType.Module.Import( typeof( Cmdlet ) );
+            var tPSCmdlet = cmdletType.Module.Import( typeof( PSCmdlet ) );
+
+            return
+                cmdletType
+                .SelfAndBaseTypes()
+                .TakeWhile( t => !t.IsSame( tCmdlet, TypeComparisonFlags.MatchAllExceptVersion ) && !t.IsSame( tPSCmdlet, TypeComparisonFlags.MatchAllExceptVersion ) )
+                .SelectMany( t => t.Properties );
+        }
+
+        /// <summary>
+        /// Returns all the [Parameter] properties of the current type and its base types. Base types at or below <see cref="Cmdlet"/> or <see cref="PSCmdlet"/>
+        /// are not considered.
+        /// </summary>
+        public static IEnumerable<PropertyDefinition> GetCmdletAndBaseParameterProperties( this TypeDefinition cmdletType )
+        {
+            return cmdletType.GetCmdletAndBaseProperties().Where( p => p.IsCmdletParameter() );
+        }
+
+        /// <summary>
+        /// Returns <c>true</c> if a specified type has a <see cref="CmdletAttribute"/> attribute and derives <see cref="Cmdlet"/>.
+        /// </summary>
+        public static bool IsCmdlet( this TypeDefinition type )
+        {
+            if ( type == null )
+                throw new ArgumentNullException( "type" );
+
+            var tCmdlet = type.Module.Import( typeof( Cmdlet ) );
+            var tCmdletAttribute = type.Module.Import( typeof( CmdletAttribute ) );
+
+            if ( tCmdlet == null || tCmdletAttribute == null )
+                return false;
+
+            return
+                type
+                    .CustomAttributes
+                    .Any( ca => ca.AttributeType.IsSame( tCmdletAttribute, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) )
+                    &&
+                type.IsSubclassOf( tCmdlet, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion );
+        }
+
+        /// <summary>
+        /// Returns <c>true</c> if a specified type has a <see cref="CmdletAttribute"/> attribute and derives <see cref="Cmdlet"/>,
+        /// and provides a real <see cref="CmdletAttribute"/> instance.
+        /// </summary>
+        public static bool IsCmdlet( this TypeDefinition type, out CmdletAttribute cmdletAttribute )
+        {
+            if ( type == null )
+                throw new ArgumentNullException( "type" );
+
+            cmdletAttribute = null;
+
+            var tCmdlet = type.Module.Import( typeof( Cmdlet ) );
+            var tCmdletAttribute = type.Module.Import( typeof( CmdletAttribute ) );
+
+            if ( tCmdlet == null || tCmdletAttribute == null )
+                return false;
+            
+            var attr =                 
+                type
+                .CustomAttributes
+                .FirstOrDefault( ca => ca.AttributeType.IsSame( tCmdletAttribute, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) );
+            if( attr != null && type.IsSubclassOf( tCmdlet, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) )
+            {
+                cmdletAttribute = attr.ConstructRealAttributeOfType<CmdletAttribute>();
+                return true;
+            }
+            else
+                return false;
+        }
+
         /// <summary>
         /// Returns an <see cref="AssemblyNameReference"/> for the scope of a specified <see cref="TypeReference"/>. This is the assembly
         /// in which the type referenced by the <see cref="TypeRef"/> is defined.
@@ -162,9 +258,24 @@ namespace PoshBuild
                 var tdBase = refBase.Resolve();
 
                 if ( tdBase != null )
+                {
+                    refBase = tdBase.BaseType;
                     yield return tdBase;
-
-                refBase = tdBase.BaseType;
+                }
+                else
+                {
+                    // Could not resolve base type
+                    if ( TaskContext.Current != null )
+                        TaskContext.Current.Log.LogWarning(
+                            "PoshBuild",
+                            "CE01A",
+                            "",
+                            null, 0, 0, 0, 0,
+                            "Failed to resolve base type reference {0}, {1}",
+                            refBase.FullName,
+                            refBase.GetScopeAssemblyNameReference().FullName );
+                    break;
+                }
             }
         }
 
@@ -185,9 +296,24 @@ namespace PoshBuild
                 var tdBase = refBase.Resolve();
 
                 if ( tdBase != null )
+                {
+                    refBase = tdBase.BaseType;
                     yield return tdBase;
-
-                refBase = tdBase.BaseType;
+                }
+                else
+                {
+                    // Could not resolve base type
+                    if ( TaskContext.Current != null )
+                        TaskContext.Current.Log.LogWarning(
+                            "PoshBuild",
+                            "CE01B",
+                            "",
+                            null, 0, 0, 0, 0,
+                            "Failed to resolve base type reference {0}, {1}",
+                            refBase.FullName,
+                            refBase.GetScopeAssemblyNameReference().FullName );
+                    break;
+                }
             }
         }
 
