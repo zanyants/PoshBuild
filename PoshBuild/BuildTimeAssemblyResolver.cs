@@ -20,7 +20,7 @@ namespace PoshBuild
         };
 
         // Redefine this to MessageImportance.High to ease development-time debugging.
-        const MessageImportance MessageImportanceLow = MessageImportance.High;
+        const MessageImportance MessageImportanceLow = MessageImportance.Low;
 
         /// <summary>
         /// Additional paths to search for assemblies.
