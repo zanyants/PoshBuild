@@ -557,7 +557,7 @@ namespace PoshBuild
 
             bool isParameterProperty = false;
 
-            if ( typeIsCmdlet && xdiId.Kind == 'P' )
+            if ( xdiId.Kind == 'P' )
             {
                 isParameterProperty = prep.Type.GetCmdletAndBaseProperties().Where( p => p.Name == xdiId.Member && p.IsCmdletParameter() ).Any();
             }
