@@ -67,7 +67,8 @@ namespace PoshBuild
                 _parameter.PropertyDefinition, 
                 parameterSetIndex == CmdletParameterInfo.NonSpecificParameterSetIndex ? 
                     null : 
-                    _parameter.ParameterAttributes[ parameterSetIndex ].ParameterSetName );
+                    _parameter.ParameterAttributes[ parameterSetIndex ].ParameterSetName,
+                _parameter.DescendantTypes );
 
             _writer.WriteEndElement(); // </maml:description>
 

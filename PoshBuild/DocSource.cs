@@ -1,4 +1,5 @@
-﻿using System.Xml;
+﻿using System.Collections.Generic;
+using System.Xml;
 using Mono.Cecil;
 
 namespace PoshBuild
@@ -24,6 +25,11 @@ namespace PoshBuild
             return false;
         }
 
+        virtual public bool WriteParameterDescription( XmlWriter writer, PropertyDefinition property, string parameterSetName, IEnumerable<TypeDefinition> descendantTypes )
+        {
+            return WriteParameterDescription( writer, property, parameterSetName );
+        }
+        
         virtual public bool WriteParameterDescription( XmlWriter writer, PropertyDefinition property, string parameterSetName )
         {
             return false;

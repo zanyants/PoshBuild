@@ -1,4 +1,5 @@
-﻿using System.Xml;
+﻿using System.Collections.Generic;
+using System.Xml;
 using Mono.Cecil;
 
 namespace PoshBuild
@@ -24,8 +25,14 @@ namespace PoshBuild
         /// Writes a parameter description. If <see cref="parameterSetName"/> is <c>null</c>, the general parameterset-independent parameter 
         /// description within the &lt;command:parameters> section should be written.
         /// </summary>
+        /// <param name="descendantTypes">
+        /// The list of types derived from the declaring type of the specified <paramref name="property"/>, in most-derived-first order.
+        /// This is supplied to allow documentation for parameters inherited from a base class to be overridden by a derived class.
+        /// The implementation of <see cref="IDocSource"/> may ignore this parameter if parameter description overidding is not supported
+        /// by the implementation.
+        /// </param>
         /// <returns><c>true</c> if description information was written; otherwise <c>false</c>.</returns>
-        bool WriteParameterDescription( XmlWriter writer, PropertyDefinition property, string parameterSetName );
+        bool WriteParameterDescription( XmlWriter writer, PropertyDefinition property, string parameterSetName, IEnumerable<TypeDefinition> descendantTypes );
 
         /// <summary>
         /// Writes a cmdlet examples. The writer should be positioned within a <c>&lt;command:examples></c> element.

@@ -38,7 +38,7 @@ namespace PoshBuild
             _sources.Add( key, source );
         }
 
-        IDocSource GetSource( TypeDefinition type )
+        protected IDocSource GetSource( TypeDefinition type )
         {
             CreateDocSourceForKey create;
             IDocSource source;
@@ -54,7 +54,7 @@ namespace PoshBuild
             return source;
         }
 
-        IDocSource GetSource( PropertyDefinition property )
+        protected IDocSource GetSource( PropertyDefinition property )
         {
             CreateDocSourceForKey create;
             IDocSource source;
@@ -70,55 +70,55 @@ namespace PoshBuild
             return source;
         }
 
-        public bool WriteCmdletSynopsis( XmlWriter writer, TypeDefinition cmdlet )
+        virtual public bool WriteCmdletSynopsis( XmlWriter writer, TypeDefinition cmdlet )
         {
             var source = GetSource( cmdlet );
             return source == null ? false : source.WriteCmdletSynopsis( writer, cmdlet );
         }
 
-        public bool WriteCmdletDescription( XmlWriter writer, TypeDefinition cmdlet )
+        virtual public bool WriteCmdletDescription( XmlWriter writer, TypeDefinition cmdlet )
         {
             var source = GetSource( cmdlet );
             return source == null ? false : source.WriteCmdletDescription( writer, cmdlet );
         }
 
-        public bool WriteParameterDescription( XmlWriter writer, PropertyDefinition property, string parameterSetName )
+        virtual public bool WriteParameterDescription( XmlWriter writer, PropertyDefinition property, string parameterSetName, IEnumerable<TypeDefinition> descendantTypes )
         {
             var source = GetSource( property );
-            return source == null ? false : source.WriteParameterDescription( writer, property, parameterSetName );
+            return source == null ? false : source.WriteParameterDescription( writer, property, parameterSetName, descendantTypes );
         }
 
-        public bool WriteCmdletExamples( XmlWriter writer, TypeDefinition cmdlet )
+        virtual public bool WriteCmdletExamples( XmlWriter writer, TypeDefinition cmdlet )
         {
             var source = GetSource( cmdlet );
             return source == null ? false : source.WriteCmdletExamples( writer, cmdlet );
         }
 
-        public bool WriteReturnValueDescription( XmlWriter writer, TypeDefinition cmdlet, string outputTypeName )
+        virtual public bool WriteReturnValueDescription( XmlWriter writer, TypeDefinition cmdlet, string outputTypeName )
         {
             var source = GetSource( cmdlet );
             return source == null ? false : source.WriteReturnValueDescription( writer, cmdlet, outputTypeName );
         }
 
-        public bool WriteInputTypeDescription( XmlWriter writer, TypeDefinition cmdlet, string inputTypeName )
+        virtual public bool WriteInputTypeDescription( XmlWriter writer, TypeDefinition cmdlet, string inputTypeName )
         {
             var source = GetSource( cmdlet );
             return source == null ? false : source.WriteInputTypeDescription( writer, cmdlet, inputTypeName );
         }
 
-        public bool WriteCmdletNotes( XmlWriter writer, TypeDefinition cmdlet )
+        virtual public bool WriteCmdletNotes( XmlWriter writer, TypeDefinition cmdlet )
         {
             var source = GetSource( cmdlet );
             return source == null ? false : source.WriteCmdletNotes( writer, cmdlet );
         }
 
-        public bool WriteCmdletRelatedLinks( XmlWriter writer, TypeDefinition cmdlet )
+        virtual public bool WriteCmdletRelatedLinks( XmlWriter writer, TypeDefinition cmdlet )
         {
             var source = GetSource( cmdlet );
             return source == null ? false : source.WriteCmdletRelatedLinks( writer, cmdlet );
         }
 
-        public bool TryGetPropertySupportsGlobbing( PropertyDefinition property, string parameterSetName, out bool supportsGlobbing )
+        virtual public bool TryGetPropertySupportsGlobbing( PropertyDefinition property, string parameterSetName, out bool supportsGlobbing )
         {
             supportsGlobbing = false;
             var source = GetSource( property );

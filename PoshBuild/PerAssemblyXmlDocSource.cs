@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Xml;
 using Microsoft.Build.Framework;
 using Mono.Cecil;
 
@@ -64,6 +66,21 @@ namespace PoshBuild
             }
 
             return result;
+        }
+
+        public override bool WriteParameterDescription( XmlWriter writer, PropertyDefinition property, string parameterSetName, IEnumerable<TypeDefinition> descendantTypes )
+        {
+            if ( descendantTypes != null )
+            {
+                foreach ( var descendantType in descendantTypes )
+                {
+                    var source = GetSource( descendantType ) as XmlDocSource;
+                    if ( source != null && source.WriteParameterDescription( writer, property, parameterSetName, descendantType ) )
+                        return true;
+                }
+            }
+
+            return base.WriteParameterDescription( writer, property, parameterSetName, null );
         }
     }
 }

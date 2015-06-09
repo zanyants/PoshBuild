@@ -231,6 +231,26 @@ namespace PoshBuild
             return WriteDescription( writer, property, "summary" );
         }
 
+        public bool WriteParameterDescription( XmlWriter writer, PropertyDefinition property, string parameterSetName, TypeDefinition contextType )
+        {
+            var id = GetIdentifier( property );
+            var contextId = GetIdentifier( contextType );
+
+            XPathNavigator xe = null;
+
+            xe = _xpd.CreateNavigator().SelectSingleNode( string.Format( "/doc/members/psoverride[@cref='{0}' and @context='{1}']/summary", id, contextId ), _namespaceResolver );
+
+            if ( xe != null && xe.HasChildren )
+            {
+                foreach ( var child in xe.SelectChildren( XPathNodeType.Element ).OfType<XPathNavigator>() )
+                    writer.WriteNode( child, false );
+
+                return true;
+            }
+            else
+                return false;
+        }
+
         public override bool WriteReturnValueDescription( XmlWriter writer, TypeDefinition cmdlet, string outputTypeName )
         {
             return WriteDescriptionEx( writer, cmdlet, string.Format( "psoutput[@cref='T:{0}']", outputTypeName ) );

@@ -57,11 +57,11 @@ namespace PoshBuild
             return false;
         }
 
-        public bool WriteParameterDescription( XmlWriter writer, PropertyDefinition property, string parameterSetName )
+        public bool WriteParameterDescription( XmlWriter writer, PropertyDefinition property, string parameterSetName, IEnumerable<TypeDefinition> descendantTypes )
         {
             foreach ( var source in _sources )
             {
-                if ( source.WriteParameterDescription( writer, property, parameterSetName ) )
+                if ( source.WriteParameterDescription( writer, property, parameterSetName, descendantTypes ) )
                     return true;
             }
             return false;

@@ -18,17 +18,20 @@ namespace PoshBuild
         public IList<ParameterAttribute> ParameterAttributes { get; private set; }
         public DefaultValueAttribute DefaultValueAttribute { get; private set; }
         public AliasAttribute AliasAttribute { get; private set; }
+        public IEnumerable<TypeDefinition> DescendantTypes { get; private set; }
 
         public int ParameterSetCount { get { return ParameterAttributes.Count; } }
         public object DefaultValue { get { return DefaultValueAttribute != null ? DefaultValueAttribute.Value : string.Empty; } }
 
-        public CmdletParameterInfo( PropertyDefinition property, IDocSource docSource)
+        public CmdletParameterInfo( PropertyDefinition property, IDocSource docSource, IEnumerable<TypeDefinition> descendantTypes )
         {
             if ( docSource == null )
                 throw new ArgumentNullException( "docSource" );
 
             if ( property == null )
                 throw new ArgumentNullException( "propertyInfo" );
+
+            DescendantTypes = descendantTypes;
 
             _docSource = docSource;
             

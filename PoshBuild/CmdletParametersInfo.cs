@@ -18,25 +18,30 @@ namespace PoshBuild
 
             var tParameterAttribute = cmdletType.Module.Import( typeof( ParameterAttribute ) );
 
-            Parameters =
+            var typeHierarchy =
                 cmdletType
                 .SelfAndBaseTypes()
                 .TakeWhile( t => t.FullName != "System.Management.Automation.Cmdlet" && t.FullName != "System.Management.Automation.PSCmdlet" )
+                .ToList();
+
+            Parameters =
+                typeHierarchy
                 .SelectMany(
-                    t => t.Properties )
+                    ( t, idx ) => t.Properties.Select( p => new { TypeHierarchyIndex = idx, Property = p }  ) )
                 .Where(
-                    property =>
-                        property.GetMethod != null && property.GetMethod.IsPublic &&
-                        property.SetMethod != null && property.SetMethod.IsPublic &&
-                        property
+                    a =>
+                        a.Property.GetMethod != null && a.Property.GetMethod.IsPublic &&
+                        a.Property.SetMethod != null && a.Property.SetMethod.IsPublic &&
+                        a.Property
                         .CustomAttributes
                         .Any( ca => ca.AttributeType.IsSame( tParameterAttribute, CecilExtensions.TypeComparisonFlags.MatchAllExceptVersion ) ) )
-                .Select( 
-                    property => new CmdletParameterInfo( property, docSource ) )
+                .Select(
+                    a => new CmdletParameterInfo( a.Property, docSource, typeHierarchy.Take( a.TypeHierarchyIndex ).ToList() ) )
                 .ToList();
 
             ParametersByParameterSet = new Dictionary<string, IList<CmdletParameterInfo>>();
             List<CmdletParameterInfo> parametersInAllSets = new List<CmdletParameterInfo>();
+
             foreach ( var parameterInfo in Parameters )
             {
                 foreach ( string parameterSetName in parameterInfo.GetParameterSetNames() )
