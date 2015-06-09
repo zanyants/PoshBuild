@@ -37,16 +37,43 @@
     </doc>
   </xsl:template>
   
-  <!-- We're only interested in nodes within member elements. -->
+  <!-- Promote psoverride elements to children of /doc/members, check and add @context -->
+  <xsl:template match="/doc/members">
+    <members>
+      <xsl:apply-templates select="member/psoverride" mode="members"/>
+      <xsl:apply-templates select="member" />
+    </members>
+  </xsl:template>
+
+  <xsl:template match="psoverride" mode="members">
+    <xsl:variable name="declaringId" select="ancestor::member/@name" />
+    <xsl:if test="not( starts-with( $declaringId, 'T:' ) )">
+      <xsl:message terminate="yes">psoverride elements may only be delcared at type scope.</xsl:message>
+    </xsl:if>
+    <xsl:if test="not( @cref )">
+      <xsl:message terminate="yes">psoverride elements must have a cref attribute.</xsl:message>
+    </xsl:if>
+    <psoverride>
+      <xsl:attribute name="context">
+        <xsl:value-of select="$declaringId"/>
+      </xsl:attribute>
+      <xsl:attribute name="cref">
+        <xsl:value-of select="@cref" />
+      </xsl:attribute>
+      <xsl:apply-templates select="node()" mode="member" />
+    </psoverride>
+  </xsl:template>
+
+    <!-- We're only interested in nodes within member elements. -->
   <xsl:template match="/doc/members/member">
     <xsl:copy>
-      <xsl:apply-templates select="@*"/>      
+      <xsl:apply-templates select="@*"/>
       <xsl:apply-templates select="node()" mode="member"/>
       <!-- Copy remarks/psnote elements to this level. -->
       <xsl:apply-templates select="remarks/psnote" mode="member"/>
     </xsl:copy>
   </xsl:template>
-  
+
   <!-- Special case for psexample elements. -->
   <xsl:template match="example/psexample" mode="memberContent">
     <xsl:if test="not(*[1][name()='code'])">
@@ -116,7 +143,10 @@
 
   <!-- Remove psnote elements from remarks section. They are copied up a level. -->
   <xsl:template match="remarks/psnote" mode="memberContent" />
-  
+
+  <!-- Remove psoverride elements. They are copied up a level. -->
+  <xsl:template match="psoverride" mode="member" />
+
   <!-- Standard @name containing elements - replace with content of @name -->
   <xsl:template match="paramref | typenameref" mode="memberContent">
     <xsl:value-of select="@name"/>
