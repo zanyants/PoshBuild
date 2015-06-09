@@ -44,7 +44,11 @@ namespace PoshBuild
             Default = PrettyOrScopeContextual
         }
 
-        XPathDocument _xpd;
+        public XPathDocument RawDocument { get; private set; }
+        public XPathDocument TransformedDocument { get; private set; }
+        public string XmlDocFile { get; private set; }
+        public bool Initialized { get; private set; }
+
         static readonly XmlNamespaceManager _namespaceResolver;
 
         static XmlDocSource()
@@ -59,10 +63,14 @@ namespace PoshBuild
         class XslExtensions
         {
             Func<string, string, TypenameRenderingStyle, IEnumerable<string>, string> _getPrettyNameForIdentifier;
+            Func<string, string, XPathNodeIterator> _psInclude;
 
-            public XslExtensions( Func<string, string, TypenameRenderingStyle, IEnumerable<string>, string> getPrettyNameForIdentifier )
+            public XslExtensions( 
+                Func<string, string, TypenameRenderingStyle, IEnumerable<string>, string> getPrettyNameForIdentifier,
+                Func<string, string, XPathNodeIterator> psInclude )
             {
                 _getPrettyNameForIdentifier = getPrettyNameForIdentifier;
+                _psInclude = psInclude;
             }
 
             public string GetPrettyNameForIdentifier( string declaringMemberIdentifier, string identifier, string style, XPathNodeIterator precedingCrefAttributesInScope )
@@ -84,19 +92,33 @@ namespace PoshBuild
 
                 return _getPrettyNameForIdentifier( declaringMemberIdentifier, identifier, trs, precedingIdentifiersInScope );
             }
+
+            public XPathNodeIterator PsInclude( string identifier, string xpath )
+            {
+                return _psInclude( identifier, xpath );
+            }
         }
 
-        public XmlDocSource( string xmlDocFile, ModuleDefinition rootModule )
+        public XmlDocSource( string xmlDocFile )
         {
             if ( string.IsNullOrEmpty( xmlDocFile ) )
                 throw new ArgumentNullException( "xmlDocFile" );
 
-            if ( rootModule == null )
-                throw new ArgumentNullException( "rootModule" );
-
             if ( !File.Exists( xmlDocFile ) )
                 throw new FileNotFoundException( "File not found.", xmlDocFile );
 
+            XmlDocFile = xmlDocFile;
+            RawDocument = new XPathDocument( xmlDocFile );
+        }
+
+        void InitializeIfRequired()
+        {
+            if ( !Initialized )
+                Initialize();
+        }
+
+        void Initialize()
+        {
             // Transform the file. This makes the content of the various documentation elements well-structured
             // and well-presented for maml use.
             var xslXmlDocToMaml = new XslCompiledTransform(
@@ -114,11 +136,17 @@ namespace PoshBuild
                     true
 #endif                
                 );
+            var xslProcessPsInclude = new XslCompiledTransform(
+#if DEBUG
+                    true
+#endif
+                );
 
             // Note: The XSL transform is compiled prior to the C# build, and a reference to the compiled assembly
             // is automatically (but transitively) added. This is done by the PoshBuild_CompileXsl target in PoshBuild.csproj.
             // Other than at build-time, Visual Studio may indicate that Xsl.XmlDocToMaml could not be found - this
             // "error" can normally be ignored. The uncompiled XSL transform is in Xsl\XmlDocToMaml.xsl.
+            xslProcessPsInclude.Load( typeof( Xsl.ProcessPsInclude ) );
             xslXmlDocToMaml.Load( typeof( Xsl.XmlDocToMaml ) );
             xslNormalizeWhitespace.Load( typeof( Xsl.NormalizeWhitespace ) );
             xslWrapBareText.Load( typeof( Xsl.WrapBareText ) );
@@ -126,36 +154,46 @@ namespace PoshBuild
             var xslArgs = new XsltArgumentList();
             xslArgs.AddExtensionObject(
                 "urn:poshbuild",
-                new XslExtensions(
-                    ( declaringMemberIdentifier, identifier, style, precedingIdentifiersInScope ) =>
-                        GetPSPrettyNameForIdentifier( declaringMemberIdentifier, identifier, style, precedingIdentifiersInScope, rootModule ) ) );
+                new XslExtensions( 
+                    GetPSPrettyNameForIdentifier, 
+                    PsInclude ) );
             
             try
             {
                 using ( var sw = new StringWriter() )
-                {
+                {                    
                     using ( var xw = XmlWriter.Create( sw ) )
-                        xslXmlDocToMaml.Transform( xmlDocFile, xslArgs, xw );
+                        xslProcessPsInclude.Transform( RawDocument, xslArgs, xw );
 
                     using ( var sw2 = new StringWriter() )
                     {
                         using ( var sr = new StringReader( sw.ToString() ) )
                         using ( var xr = XmlReader.Create( sr ) )
                         using ( var xw2 = XmlWriter.Create( sw2 ) )
-                            xslNormalizeWhitespace.Transform( xr, xw2 );
+                            xslXmlDocToMaml.Transform( xr, xslArgs, xw2 );
 
                         using ( var sw3 = new StringWriter() )
                         {
                             using ( var sr2 = new StringReader( sw2.ToString() ) )
                             using ( var xr2 = XmlReader.Create( sr2 ) )
                             using ( var xw3 = XmlWriter.Create( sw3 ) )
-                                xslWrapBareText.Transform( xr2, xw3 );
+                                xslNormalizeWhitespace.Transform( xr2, xw3 );
 
-                            using ( var sr3 = new StringReader( sw3.ToString() ) )
-                                _xpd = new XPathDocument( sr3 );
+                            using ( var sw4 = new StringWriter() )
+                            {
+                                using ( var sr3 = new StringReader( sw3.ToString() ) )
+                                using ( var xr3 = XmlReader.Create( sr3 ) )
+                                using ( var xw4 = XmlWriter.Create( sw4 ) )
+                                    xslWrapBareText.Transform( xr3, xw4 );
+
+                                using ( var sr4 = new StringReader( sw4.ToString() ) )
+                                    TransformedDocument = new XPathDocument( sr4 );
+                            }
                         }
-                    }                        
+                    }
                 }
+
+                Initialized = true;
             }
             catch ( XsltException e )
             {
@@ -165,7 +203,7 @@ namespace PoshBuild
                         "PoshBuild",
                         "XDS01",
                         "",
-                        xmlDocFile,
+                        XmlDocFile,
                         e.LineNumber,
                         e.LinePosition,
                         e.LineNumber,
@@ -190,7 +228,7 @@ namespace PoshBuild
 
             foreach ( var q in subQueries )
             {
-                xe = _xpd.CreateNavigator().SelectSingleNode( string.Format( "/doc/members/member[@name='{0}']/{1}", id, q ), _namespaceResolver );
+                xe = TransformedDocument.CreateNavigator().SelectSingleNode( string.Format( "/doc/members/member[@name='{0}']/{1}", id, q ), _namespaceResolver );
                 if ( xe != null )
                     break;
             }
@@ -213,6 +251,8 @@ namespace PoshBuild
         /// <returns><c>true</c> if synopsis information was written; otherwise <c>false</c>.</returns>
         override public bool WriteCmdletSynopsis( XmlWriter writer, TypeDefinition cmdlet )
         {
+            InitializeIfRequired();
+
             return WriteDescription( writer, cmdlet, "summary" );
         }
 
@@ -223,22 +263,28 @@ namespace PoshBuild
         /// <returns><c>true</c> if synopsis information was written; otherwise <c>false</c>.</returns>
         override public bool WriteCmdletDescription( XmlWriter writer, TypeDefinition cmdlet )
         {
+            InitializeIfRequired();
+
             return WriteDescription( writer, cmdlet, "remarks" );
         }
 
         public override bool WriteParameterDescription( XmlWriter writer, PropertyDefinition property, string parameterSetName )
         {
+            InitializeIfRequired();
+
             return WriteDescription( writer, property, "summary" );
         }
 
         public bool WriteParameterDescription( XmlWriter writer, PropertyDefinition property, string parameterSetName, TypeDefinition contextType )
         {
+            InitializeIfRequired();
+
             var id = GetIdentifier( property );
             var contextId = GetIdentifier( contextType );
 
             XPathNavigator xe = null;
 
-            xe = _xpd.CreateNavigator().SelectSingleNode( string.Format( "/doc/members/psoverride[@cref='{0}' and @context='{1}']/summary", id, contextId ), _namespaceResolver );
+            xe = TransformedDocument.CreateNavigator().SelectSingleNode( string.Format( "/doc/members/psoverride[@cref='{0}' and @context='{1}']/summary", id, contextId ), _namespaceResolver );
 
             if ( xe != null && xe.HasChildren )
             {
@@ -253,19 +299,25 @@ namespace PoshBuild
 
         public override bool WriteReturnValueDescription( XmlWriter writer, TypeDefinition cmdlet, string outputTypeName )
         {
+            InitializeIfRequired();
+
             return WriteDescriptionEx( writer, cmdlet, string.Format( "psoutput[@cref='T:{0}']", outputTypeName ) );
         }
 
         public override bool WriteInputTypeDescription( XmlWriter writer, TypeDefinition cmdlet, string inputTypeName )
         {
+            InitializeIfRequired();
+
             return WriteDescriptionEx( writer, cmdlet, string.Format( "psinput[@cref='T:{0}']", inputTypeName ) );
         }
 
         public override bool WriteCmdletExamples( XmlWriter writer, TypeDefinition cmdlet )
         {
+            InitializeIfRequired();
+
             var id = GetIdentifier( cmdlet );
 
-            var examples = _xpd.CreateNavigator().Select( string.Format( "/doc/members/member[@name='{0}']/example/command:example", id ), _namespaceResolver );
+            var examples = TransformedDocument.CreateNavigator().Select( string.Format( "/doc/members/member[@name='{0}']/example/command:example", id ), _namespaceResolver );
 
             bool didWrite = false;
 
@@ -280,9 +332,11 @@ namespace PoshBuild
 
         public override bool WriteCmdletNotes( XmlWriter writer, TypeDefinition cmdlet )
         {
+            InitializeIfRequired();
+
             var id = GetIdentifier( cmdlet );
 
-            var notes = _xpd.CreateNavigator().Select( string.Format( "/doc/members/member[@name='{0}']/psnote", id ) ).OfType<XPathNavigator>();
+            var notes = TransformedDocument.CreateNavigator().Select( string.Format( "/doc/members/member[@name='{0}']/psnote", id ) ).OfType<XPathNavigator>();
 
             bool didWrite = false;
 
@@ -297,9 +351,11 @@ namespace PoshBuild
 
         public override bool WriteCmdletRelatedLinks( XmlWriter writer, TypeDefinition cmdlet )
         {
+            InitializeIfRequired();
+
             var id = GetIdentifier( cmdlet );
 
-            var notes = _xpd.CreateNavigator().Select( string.Format( "/doc/members/member[@name='{0}']/psrelated", id ) ).OfType<XPathNavigator>();
+            var notes = TransformedDocument.CreateNavigator().Select( string.Format( "/doc/members/member[@name='{0}']/psrelated", id ) ).OfType<XPathNavigator>();
 
             bool didWrite = false;
 
@@ -314,15 +370,17 @@ namespace PoshBuild
 
         public override bool TryGetPropertySupportsGlobbing( PropertyDefinition property, string parameterSetName, out bool supportsGlobbing )
         {
+            InitializeIfRequired();
+
             supportsGlobbing = default( bool );
             var id = GetIdentifier( property );
                         
             var xe =
                 // Exact match
-                _xpd.CreateNavigator().SelectSingleNode( string.Format( "/doc/members/member[@name='{0}']/psparameter[@globbing and @parametersetname='{1}']/@globbing", id, parameterSetName ) )
+                TransformedDocument.CreateNavigator().SelectSingleNode( string.Format( "/doc/members/member[@name='{0}']/psparameter[@globbing and @parametersetname='{1}']/@globbing", id, parameterSetName ) )
                 ??
                 // Match when parametersetname not specified (equivalent to __AllParameterSets)
-                _xpd.CreateNavigator().SelectSingleNode( string.Format( "/doc/members/member[@name='{0}']/psparameter[@globbing and not( @parametersetname )]/@globbing", id ) );
+                TransformedDocument.CreateNavigator().SelectSingleNode( string.Format( "/doc/members/member[@name='{0}']/psparameter[@globbing and not( @parametersetname )]/@globbing", id ) );
 
             if ( xe != null && !string.IsNullOrWhiteSpace( xe.Value ) )
             {
@@ -464,21 +522,70 @@ namespace PoshBuild
             }
         }
 
+        XPathNodeIterator PsInclude( string identifier, string xpath )
+        {
+            if ( identifier == null )
+                throw new ArgumentNullException( "identifier" );
+
+            if ( string.IsNullOrWhiteSpace( xpath ) )
+                throw new ArgumentNullException( "xpath" );
+
+            XmlDocIdentifier xdi;
+
+            if ( !XmlDocIdentifier.TryParse( identifier, out xdi ) )
+            {
+                if ( TaskContext.Current != null )
+                {
+                    TaskContext.Current.Log.LogWarning(
+                        "PoshBuild",
+                        "XDS06",
+                        "",
+                        "",
+                        0, 0, 0, 0,
+                        "The psinclude cref value '{0}' is malformed.",
+                        identifier );
+                }
+
+                return new EmptyXPathNodeIterator();
+            }
+
+            // Try to resolve in the current raw document first:
+            var found = RawDocument.CreateNavigator().SelectSingleNode( string.Format( "/doc/members/member[@name='{0}']", identifier ) );
+
+            if ( found == null )
+            {
+                // Now try to find the type...
+                var typeDef = TaskContext.Current.BuildTimeAssemblyResolver.FindPublicType( xdi.TypeFullName ).FirstOrDefault();
+
+                if ( typeDef != null )
+                {
+                    // And from the type, the corresponding XmlDocSource:
+                    var xds = TaskContext.Current.PerAssemblyXmlDocSource.GetSource( typeDef ) as XmlDocSource;
+
+                    if ( xds != null )
+                        found = xds.RawDocument.CreateNavigator().SelectSingleNode( string.Format( "/doc/members/member[@name='{0}']", identifier ) );
+                }
+            }
+
+            if ( found != null )
+                return found.Select( xpath );
+            else
+                return new EmptyXPathNodeIterator();
+        }
+
         static string GetPSPrettyNameForIdentifier( 
             string declaringMemberIdentifier, 
             string identifier, 
             TypenameRenderingStyle trs, 
-            IEnumerable<string> precedingIdentifiersInScope,
-            ModuleDefinition rootModule )
+            IEnumerable<string> precedingIdentifiersInScope )
         {
             if ( precedingIdentifiersInScope == null )
                 throw new ArgumentNullException("precedingIdentifiersInScope");
 
-            if ( rootModule == null )
-                throw new ArgumentNullException( "rootModule" );
-
             if ( string.IsNullOrWhiteSpace( identifier ) )
                 return string.Empty;
+
+            var rootModule = TaskContext.Current.PrimaryAssembly.MainModule;
 
             XmlDocIdentifier xdiId;
 

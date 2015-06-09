@@ -152,7 +152,9 @@ namespace PoshBuild.Build
                 var readerParameters = new ReaderParameters();
                 var assemblyResolver = BuildTimeAssemblyResolver.Create( ReferencePaths, AdditionalAssemblySearchPaths, HostConfigurationFile, Log );
                 readerParameters.AssemblyResolver = assemblyResolver;
-                
+
+                TaskContext.Current.SetBuildTimeAssemblyResolver( assemblyResolver );
+
                 AssemblyDefinition assembly = null;
 
                 try
@@ -172,6 +174,7 @@ namespace PoshBuild.Build
                     return false;
                 }
 
+                TaskContext.Current.SetPrimaryAssembly( assembly );
                 assemblyResolver.AddAssembly( assembly, assemblyPath );
 
                 var xmlDocPath = XmlDocumentationFile == null ? null : XmlDocumentationFile.GetMetadata( "FullPath" );
@@ -200,10 +203,11 @@ namespace PoshBuild.Build
                                 case DocSourceNames.XmlDoc:
                                     {
                                         var ds = new PerAssemblyXmlDocSource();
+                                        TaskContext.Current.SetPerAssemblyXmlDocSource( ds );
 
                                         if ( File.Exists( xmlDocPath ) )
                                         {
-                                            var rootDs = new XmlDocSource( xmlDocPath, assembly.MainModule );
+                                            var rootDs = new XmlDocSource( xmlDocPath );
                                             ds.Add( assembly, rootDs );
                                         }
                                         else

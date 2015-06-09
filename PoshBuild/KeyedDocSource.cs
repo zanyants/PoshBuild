@@ -38,7 +38,7 @@ namespace PoshBuild
             _sources.Add( key, source );
         }
 
-        protected IDocSource GetSource( TypeDefinition type )
+        public IDocSource GetSource( TypeDefinition type )
         {
             CreateDocSourceForKey create;
             IDocSource source;
@@ -48,13 +48,13 @@ namespace PoshBuild
             if ( !_sources.TryGetValue( key, out source ) )
             {
                 source = create( type, key );
-                _sources.Add( key, source );
+                Add( key, source );
             }
 
             return source;
         }
 
-        protected IDocSource GetSource( PropertyDefinition property )
+        public IDocSource GetSource( PropertyDefinition property )
         {
             CreateDocSourceForKey create;
             IDocSource source;
@@ -64,7 +64,7 @@ namespace PoshBuild
             if ( !_sources.TryGetValue( key, out source ) )
             {
                 source = create( property.DeclaringType, key );
-                _sources.Add( key, source );
+                Add( key, source );
             }
 
             return source;

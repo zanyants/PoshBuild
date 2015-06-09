@@ -38,7 +38,7 @@ namespace PoshBuild
                 {
                     try
                     {
-                        result = new XmlDocSource( docFile, type.Module );
+                        result = new XmlDocSource( docFile );
                     }
                     catch ( Exception e )
                     {

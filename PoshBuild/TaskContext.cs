@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using Microsoft.Build.Utilities;
+using Mono.Cecil;
 
 namespace PoshBuild
 {
@@ -73,5 +74,44 @@ namespace PoshBuild
         /// The <see cref="TaskLoggingHelper"/> of the MSBuild task.
         /// </summary>
         public TaskLoggingHelper Log { get; private set; }
+
+        public AssemblyDefinition PrimaryAssembly { get; private set; }
+
+        public void SetPrimaryAssembly( AssemblyDefinition assembly )
+        {
+            if ( assembly == null )
+                throw new ArgumentNullException( "assembly" );
+
+            if ( PrimaryAssembly != null )
+                throw new InvalidOperationException( "The property has already been set." );
+
+            PrimaryAssembly = assembly;
+        }
+
+        public PerAssemblyXmlDocSource PerAssemblyXmlDocSource { get; private set; }
+
+        public void SetPerAssemblyXmlDocSource( PerAssemblyXmlDocSource source )
+        {
+            if ( source == null )
+                throw new ArgumentNullException( "source" );
+
+            if ( PerAssemblyXmlDocSource != null )
+                throw new InvalidOperationException( "The property has already been set." );
+
+            PerAssemblyXmlDocSource = source;
+        }
+
+        public BuildTimeAssemblyResolver BuildTimeAssemblyResolver { get; private set; }
+
+        public void SetBuildTimeAssemblyResolver( BuildTimeAssemblyResolver resolver )
+        {
+            if ( resolver == null )
+                throw new ArgumentNullException( "resolver" );
+
+            if ( BuildTimeAssemblyResolver != null )
+                throw new InvalidOperationException( "The property has already been set." );
+
+            BuildTimeAssemblyResolver = resolver;
+        }
     }
 }
