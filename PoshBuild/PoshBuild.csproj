@@ -84,6 +84,7 @@
     <Compile Include="DisplayFormatPropertiesInfo.cs" />
     <Compile Include="DisplayFormatPropertyInfo.cs" />
     <Compile Include="DocSource.cs" />
+    <Compile Include="EmptyXPathNodeIterator.cs" />
     <Compile Include="FallthroughDocSource.cs" />
     <Compile Include="FormattingExtensions.cs" />
     <Compile Include="IDocSource.cs" />
@@ -128,6 +129,11 @@
       <SubType>Designer</SubType>
     </None>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Xsl\ProcessPsInclude.xsl">
+      <SubType>Designer</SubType>
+    </None>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="PoshBuild_CompileXsl">
     <PropertyGroup>
@@ -137,7 +143,7 @@
       <CompiledXslAssemblyPath>$(IntermediateOutputPath)$(CompiledXslAssemblyName).dll</CompiledXslAssemblyPath>
     </PropertyGroup>
     <MakeDir Directories="$(IntermediateOutputPath)" />
-    <Exec Command="&quot;$(TargetFrameworkSDKToolsDirectory)\xsltc.exe&quot; &quot;/out:$(CompiledXslAssemblyPath)&quot; /version:1.0.0.0 $(xsltc_debug) /nologo /class:PoshBuild.Xsl.XmlDocToMaml Xsl\XmlDocToMaml.xsl /class:PoshBuild.Xsl.NormalizeWhitespace Xsl\NormalizeWhitespace.xsl /class:PoshBuild.Xsl.WrapBareText Xsl\WrapBareText.xsl /class:PoshBuild.Xsl.PostProcess Xsl\PostProcess.xsl" />
+    <Exec Command="&quot;$(TargetFrameworkSDKToolsDirectory)\xsltc.exe&quot; &quot;/out:$(CompiledXslAssemblyPath)&quot; /version:1.0.0.0 $(xsltc_debug) /nologo /class:PoshBuild.Xsl.XmlDocToMaml Xsl\XmlDocToMaml.xsl /class:PoshBuild.Xsl.NormalizeWhitespace Xsl\NormalizeWhitespace.xsl /class:PoshBuild.Xsl.WrapBareText Xsl\WrapBareText.xsl /class:PoshBuild.Xsl.PostProcess Xsl\PostProcess.xsl /class:PoshBuild.Xsl.ProcessPsInclude Xsl\ProcessPsInclude.xsl" />
     <ItemGroup>
       <Reference Include="$(CompiledXslAssemblyName)">
         <HintPath>$(CompiledXslAssemblyPath)</HintPath>
