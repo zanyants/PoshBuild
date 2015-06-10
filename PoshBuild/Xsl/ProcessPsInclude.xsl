@@ -23,19 +23,52 @@
   </xsl:template>
 
   <xsl:template match="psinclude">
-    <xsl:if test="not(@cref)">
-      <xsl:message terminate="yes">psinclude elements must have a cref attribute.</xsl:message>
-    </xsl:if>
-    <xsl:if test="not(@select)">
-      <xsl:message terminate="yes">psinclude elements must have a select attribute.</xsl:message>
-    </xsl:if>
+    <xsl:variable name="use_cref">
+      <xsl:choose>
+        <xsl:when test="@cref">
+          <xsl:value-of select="@cref"/>  
+        </xsl:when>
+        <xsl:when test="ancestor::psoverride[last()][@cref]">
+          <xsl:value-of select="ancestor::psoverride[last()]/@cref"/>
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:message terminate="yes">psinclude elements must have an explicit or impliable cref attribute.</xsl:message>
+        </xsl:otherwise>
+      </xsl:choose>
+    </xsl:variable>
+    <xsl:variable name="use_tag">
+      <xsl:choose>
+        <xsl:when test="@tag">
+          <xsl:value-of select="@tag"/>
+        </xsl:when>
+        <xsl:when test="ancestor::psoverride">
+          <xsl:value-of select="name( ancestor::*[parent::psoverride][last()] )"/>
+        </xsl:when>
+      </xsl:choose>
+    </xsl:variable>
+    <xsl:variable name="use_select">
+      <xsl:choose>
+        <xsl:when test="@select">
+          <xsl:value-of select="@select"/>
+        </xsl:when>
+        <xsl:when test="$use_tag and @span">
+          <xsl:value-of select="$use_tag"/>/span[@name='<xsl:value-of select="@span"/>']/node()
+        </xsl:when>
+        <xsl:when test="$use_tag">
+          <xsl:value-of select="$use_tag"/>/node()
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:message terminate="yes">psinclude elements must have an explicit or impliable select attribute.</xsl:message>    
+        </xsl:otherwise>
+      </xsl:choose>
+    </xsl:variable>
     <xsl:choose>
       <xsl:when test="function-available('poshbuild:PsInclude')">
         <xsl:text xml:space="preserve"> </xsl:text>
-        <xsl:apply-templates select="poshbuild:PsInclude( @cref, @select )"/>
+        <xsl:apply-templates select="poshbuild:PsInclude( $use_cref, $use_select )"/>
       </xsl:when>
       <xsl:otherwise>
-        [select '<xsl:value-of select="@select"/>' from <xsl:value-of select="@cref"/>]
+        [select '<xsl:value-of select="$use_select"/>' from <xsl:value-of select="$use_cref"/>]
       </xsl:otherwise>
     </xsl:choose>
   </xsl:template>
